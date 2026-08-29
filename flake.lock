@@ -2,9 +2,7 @@
   "nodes": {
     "flake-parts": {
       "inputs": {
-        "nixpkgs-lib": [
-          "nixpkgs-lib"
-        ]
+        "nixpkgs-lib": "nixpkgs-lib"
       },
       "locked": {
         "lastModified": 1787559586,
@@ -53,8 +51,7 @@
     "root": {
       "inputs": {
         "flake-parts": "flake-parts",
-        "import-tree": "import-tree",
-        "nixpkgs-lib": "nixpkgs-lib"
+        "import-tree": "import-tree"
       }
     }
   },
