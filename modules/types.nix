@@ -1,54 +1,60 @@
 { lib, ... }:
+let
+  nameOption = lib.mkOption {
+    type = lib.types.str;
+    readOnly = true;
+  };
+in
 {
   flake.lib.types = rec {
-    manifest = lib.types.attrsOf lib.types.anything;
+    jsonObject = lib.types.attrsOf lib.types.json;
 
-    defaults = lib.mkOption {
+    rules = lib.mkOption {
       type = lib.types.listOf (
         lib.types.submodule {
           options = {
-            match = lib.mkOption { type = manifest; };
-            apply = lib.mkOption { type = manifest; };
+            name = nameOption;
+            priority = lib.mkOption {
+              type = lib.types.int;
+              default = 0;
+            };
+            match = lib.mkOption { type = jsonObject; };
+            apply = lib.mkOption { type = jsonObject; };
           };
         }
       );
       default = [ ];
     };
 
-    clusterModule = lib.types.submodule {
+    module = lib.types.submodule {
       options = {
-        name = lib.mkOption {
-          type = lib.types.str;
-          readOnly = true;
-        };
+        name = nameOption;
 
-        manifests = lib.mkOption {
-          type = lib.types.listOf manifest;
+        modules = lib.mkOption {
+          type = lib.types.listOf jsonObject;
         };
       };
     };
 
     compartment = lib.types.submodule {
       options = {
-        settings = lib.mkOption {
-          type = manifest;
-          default = { };
-        };
+        name = nameOption;
 
-        inherit defaults;
+        defaults = rules;
+        overrides = rules;
 
         dependsOn = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
         };
 
-        clusterModules = lib.mkOption {
-          type = lib.types.listOf clusterModule;
+        modules = lib.mkOption {
+          type = lib.types.listOf module;
           default = [ ];
         };
 
         healthChecks = lib.mkOption {
-          type = lib.types.listOf manifest;
+          type = lib.types.listOf jsonObject;
           default = [ ];
         };
       };
@@ -56,29 +62,13 @@
 
     cluster = lib.types.submodule {
       options = {
-        inherit defaults settings;
+        defaults = rules;
+        overrides = rules;
 
         compartments = lib.mkOption {
-          type = lib.types.attrsOf compartment;
-          default = { };
+          type = lib.types.listOf compartment;
+          default = [ ];
         };
-      };
-    };
-
-    settings = lib.mkOption {
-      type = manifest;
-      default = {
-        internalNamespace = "flux-internal";
-        namespace = "flux-system";
-        sourceRef = {
-          namespace = "flux-system";
-          kind = "OCIRepository";
-          name = "flux-system";
-        };
-        retryInterval = "10s";
-        interval = "12h";
-        prune = true;
-        force = true;
       };
     };
   };

@@ -3,6 +3,24 @@
   flake.lib.renderCluster =
     cluster:
     let
+      kustomizationDefault = {
+        match = {
+          apiVersion = "kustomize.toolkit.fluxcd.io/v1";
+          kind = "Kustomization";
+        };
+        apply.spec = {
+          sourceRef = {
+            namespace = "flux-system";
+            kind = "OCIRepository";
+            name = "flux-system";
+          };
+          retryInterval = "10s";
+          interval = "12h";
+          prune = true;
+          force = true;
+        };
+      };
+
       groupTag =
         val:
         let
@@ -11,11 +29,29 @@
         in
         "${normalize group}---${normalize val.kind}";
 
-      applyDefaults =
+      uniqueNames =
+        kind: values:
+        let
+          names = map (v: v.name) values;
+        in
+        if lib.allUnique names then
+          values
+        else
+          throw "${kind} names must be unique: ${lib.concatStringsSep ", " names}";
+
+      applyRules =
         rules: val:
-        lib.recursiveUpdate (lib.foldl' (acc: rule: lib.recursiveUpdate acc rule.apply) { } (
-          builtins.filter (rule: lib.matchAttrs rule.match val) rules
-        )) val;
+        let
+          mergeRules =
+            rules: val:
+            lib.foldl' (acc: rule: lib.recursiveUpdate acc rule.apply) { } (
+              builtins.filter (rule: lib.matchAttrs rule.match val) rules
+            );
+          defaults = [ kustomizationDefault ] ++ sortRules rules.defaults;
+          updated = lib.recursiveUpdate (mergeRules defaults val) val;
+          sortRules = lib.sort (a: b: a.priority < b.priority);
+        in
+        lib.recursiveUpdate updated (mergeRules (sortRules rules.overrides) updated);
 
       mkYamlFile =
         val: dst:
@@ -24,59 +60,64 @@
         in
         ''cp ${src} "$out/${dst}"'';
 
-      mkFlux = opts: namespace: name: path: extra: {
-        apiVersion = "kustomize.toolkit.fluxcd.io/v1";
-        kind = "Kustomization";
-        metadata = { inherit name namespace; };
-        spec = {
-          inherit path;
-          inherit (opts)
-            retryInterval
-            sourceRef
-            interval
-            force
-            prune
-            ;
-        }
-        // lib.filterAttrs (_: v: v != [ ]) extra;
-      };
+      mkFlux =
+        rules: namespace: name: path: extra:
+        applyRules rules {
+          apiVersion = "kustomize.toolkit.fluxcd.io/v1";
+          kind = "Kustomization";
+          metadata = { inherit name namespace; };
+          spec = {
+            inherit path;
+          }
+          // lib.filterAttrs (_: v: v != [ ]) extra;
+        };
 
-      mkResources = resources: {
-        apiVersion = "kustomize.config.k8s.io/v1beta1";
-        kind = "Kustomization";
-        inherit resources;
-      };
+      mkResources =
+        rules: resources:
+        applyRules rules {
+          apiVersion = "kustomize.config.k8s.io/v1beta1";
+          kind = "Kustomization";
+          inherit resources;
+        };
 
       renderCompartment =
-        name: val:
+        compName: val:
         let
-          deps = map (name: { inherit name namespace; }) val.dependsOn;
-          opts = lib.recursiveUpdate cluster.settings val.settings;
-          modNames = map (module: module.name) val.clusterModules;
-          defaults = cluster.defaults ++ val.defaults;
-          inherit (opts) internalNamespace namespace;
+          mkModMain =
+            m: mkFlux rules "flux-system" m.name "./kustomizations/${compName}/${m.name}" { wait = true; };
+          namespace =
+            (mkFlux rules "flux-system" compName "./kustomizations/${compName}" { }).metadata.namespace;
 
-          healthChecks = map (name: {
+          rules = {
+            overrides = uniqueNames "override" (cluster.overrides ++ val.overrides);
+            defaults = uniqueNames "default" (cluster.defaults ++ val.defaults);
+          };
+
+          deps = map (name: { inherit name namespace; }) val.dependsOn;
+          modDefs = uniqueNames "module" val.modules;
+
+          healthChecks = map (moduleMain: {
             apiVersion = "kustomize.toolkit.fluxcd.io/v1";
             kind = "Kustomization";
-            inherit name namespace;
-          }) modNames;
+            inherit (moduleMain.metadata) name namespace;
+          }) (map mkModMain modDefs);
 
           renderModule =
             module:
             let
-              inherit (module) manifests name;
-              modDir = "kustomizations/${compartmentName}/${name}";
-              groups = lib.groupBy groupTag manifests;
+              resources = [ (mkResources rules (map (tag: "${tag}.yaml") groupNames)) ];
+              modDir = "kustomizations/${compName}/${name}";
+              groups = lib.groupBy groupTag modules;
               groupNames = builtins.attrNames groups;
+              inherit (module) modules name;
 
               renderGroup =
                 tag: groupedManifests:
                 let
-                  group = mkFlux opts internalNamespace "${name}---${tag}" "./${manifestDir}" { };
-                  renderedManifests = map (applyDefaults defaults) groupedManifests;
-                  manifestDir = "manifests/${compartmentName}/${name}/${tag}";
-                  kustomization = [ (mkResources [ "manifest.yaml" ]) ];
+                  group = mkFlux rules "flux-internal" "${name}---${tag}" "./${manifestDir}" { };
+                  renderedManifests = map (applyRules rules) groupedManifests;
+                  manifestDir = "manifests/${compName}/${name}/${tag}";
+                  kustomization = [ (mkResources rules [ "manifest.yaml" ]) ];
                 in
                 ''
                   mkdir -p "$out/${manifestDir}"
@@ -84,37 +125,35 @@
                   ${mkYamlFile kustomization "${manifestDir}/kustomization.yaml"}
                   ${mkYamlFile renderedManifests "${manifestDir}/manifest.yaml"}
                 '';
-
-              main = [ (mkFlux opts namespace name "./${modDir}" { wait = true; }) ];
-              resources = [ (mkResources (map (tag: "${tag}.yaml") groupNames)) ];
             in
             ''
               mkdir -p "$out/${modDir}"
-              ${mkYamlFile main "${modDir}/main.yaml"}
               ${mkYamlFile resources "${modDir}/kustomization.yaml"}
+              ${mkYamlFile [ (mkModMain module) ] "${modDir}/main.yaml"}
               ${lib.concatStringsSep "\n" (lib.mapAttrsToList renderGroup groups)}
             '';
 
-          compartmentName = name;
-          resources = [ (mkResources (map (name: "${name}/main.yaml") modNames)) ];
-          modules = map renderModule val.clusterModules;
-
+          resources = [ (mkResources rules (map (mod: "${mod.name}/main.yaml") modDefs)) ];
           main = [
-            (mkFlux opts namespace name "./kustomizations/${name}" {
+            (mkFlux rules "flux-system" compName "./kustomizations/${compName}" {
               healthChecks = val.healthChecks ++ healthChecks;
               dependsOn = deps;
             })
           ];
         in
         ''
-          mkdir -p "$out/kustomizations/${name}"
-          ${mkYamlFile main "kustomizations/${name}/main.yaml"}
-          ${mkYamlFile resources "kustomizations/${name}/kustomization.yaml"}
-          ${lib.concatStringsSep "\n" modules}
+          mkdir -p "$out/kustomizations/${compName}"
+          ${mkYamlFile main "kustomizations/${compName}/main.yaml"}
+          ${mkYamlFile resources "kustomizations/${compName}/kustomization.yaml"}
+          ${lib.concatStringsSep "\n" (map renderModule modDefs)}
         '';
 
-      resources = [ (mkResources (map (name: "${name}/main.yaml") (builtins.attrNames rendered))) ];
-      rendered = lib.mapAttrs renderCompartment cluster.compartments;
+      resources = [ (mkResources rules (map (c: "${c.name}/main.yaml") compartments)) ];
+      compartments = uniqueNames "compartment" cluster.compartments;
+      rules = {
+        overrides = uniqueNames "override" cluster.overrides;
+        defaults = uniqueNames "default" cluster.defaults;
+      };
     in
     builtins.toFile "build.sh" ''
       #!/usr/bin/env -S bash -euo pipefail
@@ -122,6 +161,6 @@
       out="''${1:?Output dir not specified}"
       mkdir -p "$out/kustomizations" "$out/manifests"
       ${mkYamlFile resources "kustomizations/kustomization.yaml"}
-      ${lib.concatStringsSep "\n" (builtins.attrValues rendered)}
+      ${lib.concatStringsSep "\n" (map (c: renderCompartment c.name c) compartments)}
     '';
 }
