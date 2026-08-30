@@ -34,6 +34,11 @@
           default = { };
         };
 
+        clusterDefaults = lib.mkOption {
+          type = lib.types.attrsOf self.lib.types.defaults.type;
+          default = { };
+        };
+
         clusters = lib.mkOption {
           type = lib.types.attrsOf self.lib.types.cluster;
           apply = lib.mapAttrs addOutputs;
