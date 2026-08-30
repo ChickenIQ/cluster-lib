@@ -8,9 +8,21 @@ let
     };
 
   jsonObject = lib.types.attrsOf lib.types.json;
-  dynamicJson = lib.types.addCheck lib.types.raw (
-    value: lib.isFunction value || jsonObject.check value
-  );
+  dynamic = type: lib.types.addCheck lib.types.raw (value: lib.isFunction value || type.check value);
+  dynamicJson = dynamic jsonObject;
+  dynamicJsonObjects = dynamic (lib.types.listOf jsonObject);
+
+  matcherOptions = name: {
+    name = lib.mkOption {
+      type = lib.types.str;
+      default = name;
+    };
+    priority = lib.mkOption {
+      type = lib.types.int;
+      default = 0;
+    };
+    match = lib.mkOption { type = dynamicJson; };
+  };
 
   nameOption = lib.mkOption {
     type = lib.types.str;
@@ -18,6 +30,7 @@ let
   };
 
   rules = listOf types.rule;
+  generators = listOf types.generator;
 
   types = rec {
     inherit jsonObject;
@@ -25,17 +38,17 @@ let
     rule = lib.types.submodule (
       { name, ... }:
       {
-        options = {
-          name = lib.mkOption {
-            type = lib.types.str;
-            default = name;
-          };
-          priority = lib.mkOption {
-            type = lib.types.int;
-            default = 0;
-          };
-          match = lib.mkOption { type = dynamicJson; };
+        options = matcherOptions name // {
           apply = lib.mkOption { type = dynamicJson; };
+        };
+      }
+    );
+
+    generator = lib.types.submodule (
+      { name, ... }:
+      {
+        options = matcherOptions name // {
+          generate = lib.mkOption { type = dynamicJsonObjects; };
         };
       }
     );
@@ -63,6 +76,7 @@ let
       options = {
         defaults = rules;
         overrides = rules;
+        inherit generators;
         compartments = listOf compartment;
       };
     };
@@ -71,6 +85,7 @@ let
   compartmentOptions = {
     defaults = rules;
     overrides = rules;
+    inherit generators;
     dependsOn = listOf lib.types.str;
     modules = listOf types.module;
     healthChecks = listOf types.jsonObject;

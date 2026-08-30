@@ -37,6 +37,7 @@
     {
       options.flake = {
         clusterCompartments = named self.lib.types.compartmentConfig;
+        clusterGenerators = named self.lib.types.generator;
         clusterModules = named self.lib.types.jsonObject;
         clusterOverrides = named self.lib.types.rule;
         clusterDefaults = named self.lib.types.rule;

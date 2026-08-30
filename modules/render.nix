@@ -39,23 +39,44 @@
         else
           throw "${kind} names must be unique: ${lib.concatStringsSep ", " names}";
 
+      resolveRule =
+        field: rule: val:
+        if lib.isFunction rule.${field} then rule.${field} val else rule.${field};
+
       matches =
-        rule: val: if lib.isFunction rule.match then rule.match val else lib.matchAttrs rule.match val;
-      patch = rule: val: if lib.isFunction rule.apply then rule.apply val else rule.apply;
+        rule: val:
+        let
+          match = resolveRule "match" rule val;
+        in
+        if builtins.isBool match then match else lib.matchAttrs match val;
+
+      matching = val: builtins.filter (rule: matches rule val);
+      sortRules = lib.sort (a: b: a.priority < b.priority);
 
       applyRules =
         rules: val:
         let
-          sortRules = lib.sort (a: b: a.priority < b.priority);
           mergeRules =
             rules: val:
-            lib.foldl' (acc: rule: lib.recursiveUpdate acc (patch rule val)) { } (
-              builtins.filter (rule: matches rule val) rules
+            lib.foldl' (acc: rule: lib.recursiveUpdate acc (resolveRule "apply" rule val)) { } (
+              matching val rules
             );
           defaults = [ kustomizationDefault ] ++ sortRules rules.defaults;
           updated = lib.recursiveUpdate (mergeRules defaults val) val;
         in
-        lib.recursiveUpdate updated (mergeRules (sortRules rules.overrides) updated);
+        builtins.seq rules.generators (
+          lib.recursiveUpdate updated (mergeRules (sortRules rules.overrides) updated)
+        );
+
+      expand =
+        rules: val:
+        let
+          updated = applyRules rules val;
+          generated = lib.concatMap (generator: resolveRule "generate" generator updated) (
+            matching updated (sortRules rules.generators)
+          );
+        in
+        [ updated ] ++ map (applyRules rules) generated;
 
       mkYamlFile =
         val: dst:
@@ -93,6 +114,7 @@
             (mkFlux rules "flux-system" compName "./kustomizations/${compName}" { }).metadata.namespace;
 
           rules = {
+            generators = uniqueNames "generator" (cluster.generators ++ val.generators);
             overrides = uniqueNames "override" (cluster.overrides ++ val.overrides);
             defaults = uniqueNames "default" (cluster.defaults ++ val.defaults);
           };
@@ -110,8 +132,8 @@
             module:
             let
               resources = [ (mkResources rules (map (tag: "${tag}.yaml") groupNames)) ];
+              groups = lib.groupBy groupTag (lib.concatMap (expand rules) modules);
               modDir = "kustomizations/${compName}/${name}";
-              groups = lib.groupBy groupTag modules;
               groupNames = builtins.attrNames groups;
               inherit (module) modules name;
 
@@ -119,7 +141,6 @@
                 tag: groupedManifests:
                 let
                   group = mkFlux rules "flux-internal" "${name}---${tag}" "./${manifestDir}" { };
-                  renderedManifests = map (applyRules rules) groupedManifests;
                   manifestDir = "manifests/${compName}/${name}/${tag}";
                   kustomization = [ (mkResources rules [ "manifest.yaml" ]) ];
                 in
@@ -127,7 +148,7 @@
                   mkdir -p "$out/${manifestDir}"
                   ${mkYamlFile [ group ] "${modDir}/${tag}.yaml"}
                   ${mkYamlFile kustomization "${manifestDir}/kustomization.yaml"}
-                  ${mkYamlFile renderedManifests "${manifestDir}/manifest.yaml"}
+                  ${mkYamlFile groupedManifests "${manifestDir}/manifest.yaml"}
                 '';
             in
             ''
@@ -155,6 +176,7 @@
       resources = [ (mkResources rules (map (c: "${c.name}/main.yaml") compartments)) ];
       compartments = uniqueNames "compartment" cluster.compartments;
       rules = {
+        generators = uniqueNames "generator" cluster.generators;
         overrides = uniqueNames "override" cluster.overrides;
         defaults = uniqueNames "default" cluster.defaults;
       };
