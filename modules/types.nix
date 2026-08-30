@@ -1,62 +1,61 @@
 { lib, ... }:
 let
+  listOf =
+    type:
+    lib.mkOption {
+      type = lib.types.listOf type;
+      default = [ ];
+    };
+
+  jsonObject = lib.types.attrsOf lib.types.json;
+  dynamicJson = lib.types.addCheck lib.types.raw (
+    value: lib.isFunction value || jsonObject.check value
+  );
+
   nameOption = lib.mkOption {
     type = lib.types.str;
     readOnly = true;
   };
-in
-{
-  flake.lib.types = rec {
-    jsonObject = lib.types.attrsOf lib.types.json;
 
-    rules = lib.mkOption {
-      type = lib.types.listOf (
-        lib.types.submodule {
-          options = {
-            name = nameOption;
-            priority = lib.mkOption {
-              type = lib.types.int;
-              default = 0;
-            };
-            match = lib.mkOption { type = jsonObject; };
-            apply = lib.mkOption { type = jsonObject; };
+  rules = listOf types.rule;
+
+  types = rec {
+    inherit jsonObject;
+
+    rule = lib.types.submodule (
+      { name, ... }:
+      {
+        options = {
+          name = lib.mkOption {
+            type = lib.types.str;
+            default = name;
           };
-        }
-      );
-      default = [ ];
-    };
+          priority = lib.mkOption {
+            type = lib.types.int;
+            default = 0;
+          };
+          match = lib.mkOption { type = dynamicJson; };
+          apply = lib.mkOption { type = dynamicJson; };
+        };
+      }
+    );
 
     module = lib.types.submodule {
       options = {
         name = nameOption;
-
         modules = lib.mkOption {
           type = lib.types.listOf jsonObject;
         };
       };
     };
 
+    compartmentConfig = lib.types.submodule {
+      options = compartmentOptions;
+    };
+
     compartment = lib.types.submodule {
-      options = {
+      options = compartmentOptions // {
         name = nameOption;
-
-        defaults = rules;
-        overrides = rules;
-
-        dependsOn = lib.mkOption {
-          type = lib.types.listOf lib.types.str;
-          default = [ ];
-        };
-
-        modules = lib.mkOption {
-          type = lib.types.listOf module;
-          default = [ ];
-        };
-
-        healthChecks = lib.mkOption {
-          type = lib.types.listOf jsonObject;
-          default = [ ];
-        };
       };
     };
 
@@ -64,12 +63,19 @@ in
       options = {
         defaults = rules;
         overrides = rules;
-
-        compartments = lib.mkOption {
-          type = lib.types.listOf compartment;
-          default = [ ];
-        };
+        compartments = listOf compartment;
       };
     };
   };
+
+  compartmentOptions = {
+    defaults = rules;
+    overrides = rules;
+    dependsOn = listOf lib.types.str;
+    modules = listOf types.module;
+    healthChecks = listOf types.jsonObject;
+  };
+in
+{
+  flake.lib.types = types;
 }

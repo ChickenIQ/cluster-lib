@@ -8,11 +8,13 @@
       ...
     }:
     let
-      namedObjects = lib.mkOption {
-        apply = lib.mapAttrs (name: value: value // { inherit name; });
-        type = lib.types.attrsOf self.lib.types.jsonObject;
-        default = { };
-      };
+      named =
+        type:
+        lib.mkOption {
+          apply = lib.mapAttrs (name: value: value // { inherit name; });
+          type = lib.types.attrsOf type;
+          default = { };
+        };
 
       addOutputs =
         name: clusterConfig:
@@ -34,10 +36,10 @@
     in
     {
       options.flake = {
-        clusterModules = namedObjects;
-        clusterDefaults = namedObjects;
-        clusterOverrides = namedObjects;
-        clusterCompartments = namedObjects;
+        clusterCompartments = named self.lib.types.compartmentConfig;
+        clusterModules = named self.lib.types.jsonObject;
+        clusterOverrides = named self.lib.types.rule;
+        clusterDefaults = named self.lib.types.rule;
 
         clusters = lib.mkOption {
           type = lib.types.attrsOf self.lib.types.cluster;

@@ -39,17 +39,21 @@
         else
           throw "${kind} names must be unique: ${lib.concatStringsSep ", " names}";
 
+      matches =
+        rule: val: if lib.isFunction rule.match then rule.match val else lib.matchAttrs rule.match val;
+      patch = rule: val: if lib.isFunction rule.apply then rule.apply val else rule.apply;
+
       applyRules =
         rules: val:
         let
+          sortRules = lib.sort (a: b: a.priority < b.priority);
           mergeRules =
             rules: val:
-            lib.foldl' (acc: rule: lib.recursiveUpdate acc rule.apply) { } (
-              builtins.filter (rule: lib.matchAttrs rule.match val) rules
+            lib.foldl' (acc: rule: lib.recursiveUpdate acc (patch rule val)) { } (
+              builtins.filter (rule: matches rule val) rules
             );
           defaults = [ kustomizationDefault ] ++ sortRules rules.defaults;
           updated = lib.recursiveUpdate (mergeRules defaults val) val;
-          sortRules = lib.sort (a: b: a.priority < b.priority);
         in
         lib.recursiveUpdate updated (mergeRules (sortRules rules.overrides) updated);
 
