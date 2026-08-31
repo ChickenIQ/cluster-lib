@@ -38,9 +38,14 @@
       options.flake = {
         clusterCompartments = named self.lib.types.compartmentConfig;
         clusterGenerators = named self.lib.types.generator;
-        clusterModules = named self.lib.types.jsonObject;
         clusterOverrides = named self.lib.types.rule;
         clusterDefaults = named self.lib.types.rule;
+
+        clusterModules = lib.mkOption {
+          apply = lib.mapAttrs (name: modules: { inherit name modules; });
+          type = lib.types.attrsOf (lib.types.listOf self.lib.types.jsonObject);
+          default = { };
+        };
 
         clusters = lib.mkOption {
           type = lib.types.attrsOf self.lib.types.cluster;

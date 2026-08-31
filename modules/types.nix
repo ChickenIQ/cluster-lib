@@ -7,20 +7,22 @@ let
       default = [ ];
     };
 
-  jsonObject = lib.types.attrsOf lib.types.json;
   dynamic = type: lib.types.addCheck lib.types.raw (value: lib.isFunction value || type.check value);
-  dynamicJson = dynamic jsonObject;
   dynamicJsonObjects = dynamic (lib.types.listOf jsonObject);
+  jsonObject = lib.types.attrsOf lib.types.json;
+  dynamicJson = dynamic jsonObject;
 
   matcherOptions = name: {
     name = lib.mkOption {
       type = lib.types.str;
       default = name;
     };
+
     priority = lib.mkOption {
       type = lib.types.int;
       default = 0;
     };
+
     match = lib.mkOption { type = dynamicJson; };
   };
 
