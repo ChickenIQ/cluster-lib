@@ -1,14 +1,12 @@
 { self, lib, ... }:
 {
-  options.flake.lib = lib.mkOption {
-    type = lib.types.lazyAttrsOf lib.types.raw;
-  };
+  options.flake.lib = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; };
 
   config.flake.lib = {
     mkCluster =
       clusterConfig:
       let
-        cluster =
+        cluster = self.lib.validation.cluster (
           (lib.evalModules {
             modules = [
               {
@@ -16,7 +14,8 @@
                 config.cluster = clusterConfig;
               }
             ];
-          }).config.cluster;
+          }).config.cluster
+        );
       in
       cluster // { buildScript = self.lib.renderCluster cluster; };
 

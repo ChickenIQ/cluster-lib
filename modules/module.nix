@@ -16,12 +16,12 @@
           default = { };
         };
 
-      addOutputs =
+      addPkgs =
         name: clusterConfig:
         let
           cluster = self.lib.mkCluster clusterConfig;
 
-          outputs = lib.genAttrs config.systems (
+          pkgs = lib.genAttrs config.systems (
             system:
             withSystem system (
               { pkgs, ... }:
@@ -29,8 +29,8 @@
             )
           );
 
-          artifacts = lib.mapAttrs (_: output: output.artifact) outputs;
-          rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) outputs;
+          artifacts = lib.mapAttrs (_: output: output.artifact) pkgs;
+          rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) pkgs;
         in
         cluster // { inherit artifacts rawArtifacts; };
     in
@@ -49,7 +49,7 @@
 
         clusters = lib.mkOption {
           type = lib.types.attrsOf self.lib.types.cluster;
-          apply = lib.mapAttrs addOutputs;
+          apply = lib.mapAttrs addPkgs;
           default = { };
         };
       };

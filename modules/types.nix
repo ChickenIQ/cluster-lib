@@ -1,96 +1,82 @@
 { lib, ... }:
 let
-  listOf =
+  jsonObject = lib.types.attrsOf lib.types.json;
+  dynamic = type: lib.types.addCheck lib.types.raw (value: lib.isFunction value || type.check value);
+
+  list =
     type:
     lib.mkOption {
       type = lib.types.listOf type;
       default = [ ];
     };
 
-  dynamic = type: lib.types.addCheck lib.types.raw (value: lib.isFunction value || type.check value);
-  dynamicJsonObjects = dynamic (lib.types.listOf jsonObject);
-  jsonObject = lib.types.attrsOf lib.types.json;
-  dynamicJson = dynamic jsonObject;
-
-  matcherOptions = name: {
-    name = lib.mkOption {
-      type = lib.types.str;
-      default = name;
+  named =
+    options:
+    lib.types.submodule {
+      options = options // {
+        name = lib.mkOption {
+          type = lib.types.str;
+          readOnly = true;
+        };
+      };
     };
 
+  matcher =
+    field: type:
+    lib.types.submodule (
+      { name, ... }:
+      {
+        options = {
+          name = lib.mkOption {
+            type = lib.types.str;
+            default = name;
+          };
+          priority = lib.mkOption {
+            type = lib.types.int;
+            default = 0;
+          };
+          match = lib.mkOption { type = dynamic jsonObject; };
+          ${field} = lib.mkOption { inherit type; };
+        };
+      }
+    );
+
+  ruleOptions = {
+    defaults = list types.rule;
+    overrides = list types.rule;
+    generators = list types.generator;
+  };
+
+  compartmentOptions = ruleOptions // {
     priority = lib.mkOption {
       type = lib.types.int;
       default = 0;
     };
-
-    match = lib.mkOption { type = dynamicJson; };
+    modules = list types.module;
   };
-
-  nameOption = lib.mkOption {
-    type = lib.types.str;
-    readOnly = true;
-  };
-
-  rules = listOf types.rule;
-  generators = listOf types.generator;
 
   types = rec {
     inherit jsonObject;
 
-    rule = lib.types.submodule (
-      { name, ... }:
-      {
-        options = matcherOptions name // {
-          apply = lib.mkOption { type = dynamicJson; };
-        };
-      }
-    );
+    rule = matcher "apply" (dynamic jsonObject);
+    generator = matcher "generate" (dynamic (lib.types.listOf jsonObject));
 
-    generator = lib.types.submodule (
-      { name, ... }:
-      {
-        options = matcherOptions name // {
-          generate = lib.mkOption { type = dynamicJsonObjects; };
-        };
-      }
-    );
-
-    module = lib.types.submodule {
-      options = {
-        name = nameOption;
-        modules = lib.mkOption {
-          type = lib.types.listOf jsonObject;
-        };
-      };
+    module = named {
+      modules = lib.mkOption { type = lib.types.listOf jsonObject; };
     };
 
-    compartmentConfig = lib.types.submodule {
-      options = compartmentOptions;
-    };
-
-    compartment = lib.types.submodule {
-      options = compartmentOptions // {
-        name = nameOption;
-      };
-    };
+    compartmentConfig = lib.types.submodule { options = compartmentOptions; };
+    compartment = named compartmentOptions;
 
     cluster = lib.types.submodule {
-      options = {
-        defaults = rules;
-        overrides = rules;
-        inherit generators;
-        compartments = listOf compartment;
+      options = ruleOptions // {
+        options = lib.mkOption {
+          type = jsonObject;
+          default = { };
+        };
+        compartments = list compartment;
       };
     };
-  };
-
-  compartmentOptions = {
-    defaults = rules;
-    overrides = rules;
-    inherit generators;
-    dependsOn = listOf lib.types.str;
-    modules = listOf types.module;
-    healthChecks = listOf types.jsonObject;
   };
 in
 {
