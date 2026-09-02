@@ -11,7 +11,7 @@
         ''cp ${src} "$out/${dst}"'';
 
       mkComp =
-        name: c:
+        c:
         let
           rules = {
             generators = cluster.generators ++ c.generators;
@@ -20,10 +20,10 @@
           };
         in
         ''
-          mkdir -p "$out/compartments/${name}"
+          mkdir -p "$out/compartments/${c.name}"
           ${lib.concatMapStringsSep "\n" (
             m:
-            mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) m.modules) "compartments/${name}/${m.name}.yaml"
+            mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) m.modules) "compartments/${c.name}/${m.name}.yaml"
           ) c.modules}
         '';
 
@@ -38,6 +38,6 @@
       out="''${1:?Output dir not specified}"
       mkdir -p "$out/applications" "$out/compartments"
       ${mkYamlFile [ appSet ] "applications/applicationset.yaml"}
-      ${lib.concatStringsSep "\n" (map (c: mkComp c.name c) cluster.compartments)}
+      ${lib.concatMapStringsSep "\n" mkComp cluster.compartments}
     '';
 }

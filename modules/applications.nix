@@ -18,7 +18,6 @@
             list.elements = lib.concatMap (
               compartment:
               map (module: {
-                name = "${compartment.name}-${module.name}";
                 compartment = compartment.name;
                 module = module.name;
               }) compartment.modules
@@ -41,7 +40,7 @@
 
         template = {
           metadata = {
-            name = "{{.name}}";
+            name = "{{.compartment}}--{{.module}}";
             labels."compartment" = "{{.compartment}}";
           };
 

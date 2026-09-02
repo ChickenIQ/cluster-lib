@@ -3,7 +3,7 @@
   flake.lib.rules =
     let
       matching = value: builtins.filter (rule: matches rule value);
-      sortRules = lib.sort (a: b: a.priority < b.priority);
+      sortRules = lib.sortOn (rule: rule.priority);
 
       resolve =
         field: rule: value:
@@ -24,19 +24,26 @@
             lib.foldl' (acc: rule: lib.recursiveUpdate acc (resolve "apply" rule current)) { } (
               matching current candidates
             );
-          updated = lib.recursiveUpdate (merge (sortRules rules.defaults) value) value;
+          updated = lib.recursiveUpdate (merge rules.defaults value) value;
         in
-        lib.recursiveUpdate updated (merge (sortRules rules.overrides) updated);
+        lib.recursiveUpdate updated (merge rules.overrides updated);
     in
     {
       evaluate =
         rules: value:
         let
-          updated = apply rules value;
           generated = lib.concatMap (generator: resolve "generate" generator updated) (
-            matching updated (sortRules rules.generators)
+            matching updated sortedRules.generators
           );
+
+          sortedRules = {
+            generators = sortRules rules.generators;
+            overrides = sortRules rules.overrides;
+            defaults = sortRules rules.defaults;
+          };
+
+          updated = apply sortedRules value;
         in
-        [ updated ] ++ map (apply rules) generated;
+        [ updated ] ++ map (apply sortedRules) generated;
     };
 }
