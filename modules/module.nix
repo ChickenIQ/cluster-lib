@@ -33,6 +33,14 @@
           rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) pkgs;
         in
         cluster // { inherit artifacts rawArtifacts; };
+
+      resolveCluster =
+        clusters: name:
+        let
+          cluster = clusters.${name};
+          bases = map (resolveCluster clusters) (cluster.extends or [ ]);
+        in
+        lib.foldl' lib.recursiveUpdate { } (bases ++ [ (removeAttrs cluster [ "extends" ]) ]);
     in
     {
       options.flake = {
@@ -48,8 +56,8 @@
         };
 
         clusters = lib.mkOption {
-          type = lib.types.attrsOf self.lib.types.cluster;
-          apply = lib.mapAttrs addPkgs;
+          type = lib.types.attrsOf lib.types.raw;
+          apply = clusters: lib.mapAttrs (name: _: addPkgs name (resolveCluster clusters name)) clusters;
           default = { };
         };
       };
