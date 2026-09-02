@@ -6,8 +6,11 @@
         kind: values:
         let
           names = map (value: value.name) values;
+          duplicates = builtins.filter (n: 1 < lib.count (c: c == n) names) (lib.unique names);
         in
-        lib.assertMsg (lib.allUnique names) "${kind} names must be unique: ${lib.concatStringsSep ", " names}";
+        lib.assertMsg (
+          duplicates == [ ]
+        ) "${kind} names must be unique: ${lib.concatStringsSep ", " duplicates}";
 
       cluster =
         v:
