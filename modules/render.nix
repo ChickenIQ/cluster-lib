@@ -3,6 +3,9 @@
   flake.lib.renderCluster =
     cluster:
     let
+      appSet = self.lib.mkApplicationSet { inherit (cluster) compartments name options; };
+      rules = { inherit (cluster) generators overrides defaults; };
+
       mkYamlFile =
         val: dst:
         let
@@ -10,10 +13,14 @@
         in
         ''cp ${src} "$out/${dst}"'';
 
+      mkModule =
+        rules: path: m:
+        mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) m.modules) "${path}/${m.name}.yaml";
+
       mkComp =
         c:
         let
-          rules = {
+          compartmentRules = {
             generators = cluster.generators ++ c.generators;
             overrides = cluster.overrides ++ c.overrides;
             defaults = cluster.defaults ++ c.defaults;
@@ -21,23 +28,16 @@
         in
         ''
           mkdir -p "$out/compartments/${c.name}"
-          ${lib.concatMapStringsSep "\n" (
-            m:
-            mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) m.modules) "compartments/${c.name}/${m.name}.yaml"
-          ) c.modules}
+          ${lib.concatMapStringsSep "\n" (mkModule compartmentRules "compartments/${c.name}") c.modules}
         '';
-
-      appSet = self.lib.mkApplicationSet {
-        options = cluster.options;
-        inherit (cluster) compartments;
-      };
     in
     builtins.toFile "build.sh" ''
       #!/usr/bin/env -S bash -euo pipefail
 
       out="''${1:?Output dir not specified}"
-      mkdir -p "$out/applications" "$out/compartments"
-      ${mkYamlFile [ appSet ] "applications/applicationset.yaml"}
+      mkdir -p "$out/cluster" "$out/compartments"
+      ${mkYamlFile [ appSet ] "cluster/cluster-${cluster.name}.yaml"}
+      ${lib.concatMapStringsSep "\n" (mkModule rules "cluster") cluster.modules}
       ${lib.concatMapStringsSep "\n" mkComp cluster.compartments}
     '';
 }

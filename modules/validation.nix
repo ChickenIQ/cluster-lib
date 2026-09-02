@@ -2,7 +2,7 @@
 {
   flake.lib.validation =
     let
-      uniqueNames =
+      unique =
         kind: values:
         let
           names = map (value: value.name) values;
@@ -10,32 +10,27 @@
         lib.assertMsg (lib.allUnique names) "${kind} names must be unique: ${lib.concatStringsSep ", " names}";
 
       cluster =
-        value:
+        v:
         let
-          applications = lib.concatMap (
-            compartment: map (module: { name = "${compartment.name}-${module.name}"; }) compartment.modules
-          ) value.compartments;
-
-          compartmentChecks = lib.concatMap (compartment: [
-            (uniqueNames "generator" (value.generators ++ compartment.generators))
-            (uniqueNames "override" (value.overrides ++ compartment.overrides))
-            (uniqueNames "default" (value.defaults ++ compartment.defaults))
-            (uniqueNames "module" compartment.modules)
-          ]) value.compartments;
-
-          checks = [
-            (uniqueNames "compartment" value.compartments)
-            (uniqueNames "generator" value.generators)
-            (uniqueNames "application" applications)
-            (uniqueNames "override" value.overrides)
-            (uniqueNames "default" value.defaults)
-          ]
-          ++ compartmentChecks;
+          checks =
+            lib.concatMap (c: [
+              (unique "generator" (v.generators ++ c.generators))
+              (unique "override" (v.overrides ++ c.overrides))
+              (unique "default" (v.defaults ++ c.defaults))
+            ]) v.compartments
+            ++ [
+              (unique "cluster file" ([ { name = "cluster-${v.name}"; } ] ++ v.modules))
+              (unique "module" (v.modules ++ lib.concatMap (c: c.modules) v.compartments))
+              (unique "compartment" v.compartments)
+              (unique "generator" v.generators)
+              (unique "override" v.overrides)
+              (unique "default" v.defaults)
+            ];
         in
         assert lib.all lib.id checks;
-        value;
+        v;
     in
     {
-      inherit cluster uniqueNames;
+      inherit cluster unique;
     };
 }

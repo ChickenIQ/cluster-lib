@@ -4,14 +4,38 @@
 
   config.flake.lib = {
     mkCluster =
-      clusterConfig:
+      name: clusterConfig:
       let
+        resolve = component: if lib.isFunction component then component args else component;
+        meta = clusterConfig.meta or { };
+        args = { inherit meta; };
+
+        resolveRules =
+          value:
+          value
+          // lib.genAttrs [ "defaults" "generators" "overrides" ] (
+            field: map resolve (value.${field} or [ ])
+          );
+
+        resolveCompartment =
+          compartment:
+          let
+            resolved = resolveRules (resolve compartment);
+          in
+          resolved // { modules = map resolve (resolved.modules or [ ]); };
+
+        resolvedConfig = resolveRules clusterConfig // {
+          compartments = map resolveCompartment (clusterConfig.compartments or [ ]);
+          modules = map resolve (clusterConfig.modules or [ ]);
+          inherit meta name;
+        };
+
         cluster = self.lib.validation.cluster (
           (lib.evalModules {
             modules = [
               {
                 options.cluster = lib.mkOption { type = self.lib.types.cluster; };
-                config.cluster = clusterConfig;
+                config.cluster = resolvedConfig;
               }
             ];
           }).config.cluster

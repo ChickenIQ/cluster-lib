@@ -1,12 +1,16 @@
 { lib, ... }:
 {
   flake.lib.mkApplicationSet =
-    { compartments, options }:
+    {
+      compartments,
+      options,
+      name,
+    }:
     lib.recursiveUpdate {
       apiVersion = "argoproj.io/v1alpha1";
       kind = "ApplicationSet";
       metadata = {
-        name = "cluster";
+        name = "cluster-${name}";
         namespace = "argocd";
       };
       spec = {
@@ -51,7 +55,7 @@
             source = {
               path = "compartments/{{.compartment}}";
               directory.include = "{{.module}}.yaml";
-              targetRevision = "latest";
+              targetRevision = name;
             };
           };
         };
