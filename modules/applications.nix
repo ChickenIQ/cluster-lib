@@ -50,6 +50,7 @@
 
           spec = {
             destination.server = "https://kubernetes.default.svc";
+            syncPolicy.automated.enabled = false;
             project = "default";
 
             source = {
