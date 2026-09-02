@@ -44,7 +44,7 @@
 
         template = {
           metadata = {
-            name = "{{.compartment}}--{{.module}}";
+            name = "{{.module}}";
             labels."compartment" = "{{.compartment}}";
           };
 
