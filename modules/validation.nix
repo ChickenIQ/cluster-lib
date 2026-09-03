@@ -15,28 +15,34 @@
       cluster =
         v:
         let
+          ruleChecks = rules: [
+            (unique "override" rules.overrides)
+            (unique "default" rules.defaults)
+          ];
+
           applications = lib.concatMap (c: c.applications) v.compartments;
           embeddedApplications = lib.concatMap (
             application:
-            map (resource: { name = resource.metadata.name; }) (
-              builtins.filter (
-                resource: resource.kind or null == "Application" && resource.metadata.name or null != null
-              ) application.resources
-            )
+            lib.concatMap (
+              resource:
+              lib.optional (resource.kind or null == "Application" && resource.metadata.name or null != null) {
+                name = resource.metadata.name;
+              }
+            ) application.resources
           ) applications;
 
           checks =
-            lib.concatMap (c: [
-              (unique "generator" (v.generators ++ c.generators))
-              (unique "override" (v.overrides ++ c.overrides))
-              (unique "default" (v.defaults ++ c.defaults))
-            ]) v.compartments
+            ruleChecks v
+            ++ lib.concatMap (
+              c:
+              ruleChecks {
+                overrides = v.overrides ++ c.overrides;
+                defaults = v.defaults ++ c.defaults;
+              }
+            ) v.compartments
             ++ [
               (unique "application" (applications ++ embeddedApplications))
               (unique "compartment" v.compartments)
-              (unique "generator" v.generators)
-              (unique "override" v.overrides)
-              (unique "default" v.defaults)
             ];
         in
         assert lib.all lib.id checks;

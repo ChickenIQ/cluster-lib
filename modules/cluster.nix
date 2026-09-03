@@ -7,15 +7,17 @@
       meta = rawMeta // {
         tag = rawMeta.tag or name;
       };
+
       resolve =
         meta: component: if lib.isFunction component then component { inherit meta; } else component;
 
       resolveRules =
         meta: value:
         value
-        // lib.genAttrs [ "defaults" "generators" "overrides" ] (
-          field: map (resolve meta) (value.${field} or [ ])
-        );
+        // {
+          defaults = map (resolve meta) (value.defaults or [ ]);
+          overrides = map (resolve meta) (value.overrides or [ ]);
+        };
 
       resolveCompartment =
         compartment:

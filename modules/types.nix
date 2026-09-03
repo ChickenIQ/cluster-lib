@@ -3,50 +3,35 @@ let
   dynamic = type: lib.types.either (lib.types.functionTo lib.types.raw) type;
   jsonObject = lib.types.attrsOf lib.types.json;
 
-  list =
+  listOption =
     type:
     lib.mkOption {
       type = lib.types.listOf type;
       default = [ ];
     };
 
-  named =
+  emptyJsonOption = lib.mkOption {
+    type = jsonObject;
+    default = { };
+  };
+
+  submodule = options: lib.types.submodule { inherit options; };
+
+  namedSubmodule =
     options:
-    lib.types.submodule {
-      options = options // {
+    submodule (
+      options
+      // {
         name = lib.mkOption {
           type = lib.types.str;
           readOnly = true;
-        };
-      };
-    };
-
-  matcher =
-    field: type:
-    lib.types.submodule (
-      { name, ... }:
-      {
-        options = {
-          match = lib.mkOption { type = dynamic jsonObject; };
-          ${field} = lib.mkOption { inherit type; };
-
-          priority = lib.mkOption {
-            type = lib.types.int;
-            default = 0;
-          };
-
-          name = lib.mkOption {
-            type = lib.types.str;
-            default = name;
-          };
         };
       }
     );
 
   ruleOptions = {
-    generators = list types.generator;
-    overrides = list types.rule;
-    defaults = list types.rule;
+    overrides = listOption types.rule;
+    defaults = listOption types.rule;
   };
 
   metaOptions = {
@@ -56,14 +41,8 @@ let
 
   namespaceOptions = {
     name = lib.mkOption { type = lib.types.str; };
-    annotations = lib.mkOption {
-      type = jsonObject;
-      default = { };
-    };
-    labels = lib.mkOption {
-      type = jsonObject;
-      default = { };
-    };
+    annotations = emptyJsonOption;
+    labels = emptyJsonOption;
     type = lib.mkOption {
       type = lib.types.enum [
         ""
@@ -78,7 +57,7 @@ let
   applicationOptions = {
     resources = lib.mkOption { type = lib.types.listOf jsonObject; };
     namespace = lib.mkOption {
-      type = lib.types.submodule { options = namespaceOptions; };
+      type = submodule namespaceOptions;
     };
     bootstrap = lib.mkOption {
       type = lib.types.bool;
@@ -88,23 +67,14 @@ let
       type = lib.types.nullOr jsonObject;
       default = null;
     };
-    sources = list jsonObject;
-    metadata = lib.mkOption {
-      type = jsonObject;
-      default = { };
-    };
-    spec = lib.mkOption {
-      type = jsonObject;
-      default = { };
-    };
+    sources = listOption jsonObject;
+    metadata = emptyJsonOption;
+    spec = emptyJsonOption;
   };
 
   compartmentOptions = ruleOptions // {
-    applications = list types.application;
-    meta = lib.mkOption {
-      type = jsonObject;
-      default = { };
-    };
+    applications = listOption types.application;
+    meta = emptyJsonOption;
     priority = lib.mkOption {
       type = lib.types.int;
       default = 0;
@@ -112,28 +82,44 @@ let
   };
 
   types = rec {
-    applicationConfig = lib.types.submodule { options = applicationOptions; };
-    application = named applicationOptions;
-    compartmentConfig = lib.types.submodule { options = compartmentOptions; };
-    generator = matcher "generate" (dynamic (lib.types.listOf jsonObject));
-    rule = matcher "apply" (dynamic jsonObject);
-    compartment = named compartmentOptions;
+    applicationConfig = submodule applicationOptions;
+    compartmentConfig = submodule compartmentOptions;
+    application = namedSubmodule applicationOptions;
+    rule = lib.types.submodule (
+      { name, ... }:
+      {
+        options = {
+          match = lib.mkOption { type = dynamic jsonObject; };
+          apply = lib.mkOption { type = dynamic jsonObject; };
+          priority = lib.mkOption {
+            type = lib.types.int;
+            default = 0;
+          };
+          name = lib.mkOption {
+            type = lib.types.str;
+            default = name;
+          };
+        };
+      }
+    );
+    compartment = namedSubmodule compartmentOptions;
     inherit dynamic jsonObject;
 
-    cluster = lib.types.submodule {
-      options = ruleOptions // {
-        compartments = list compartment;
+    cluster = submodule (
+      ruleOptions
+      // {
+        compartments = listOption compartment;
 
         meta = lib.mkOption {
-          type = lib.types.submodule { options = metaOptions; };
+          type = submodule metaOptions;
         };
 
         name = lib.mkOption {
           type = lib.types.str;
           readOnly = true;
         };
-      };
-    };
+      }
+    );
   };
 in
 {

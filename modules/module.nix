@@ -8,29 +8,23 @@
       ...
     }:
     let
-      named =
-        type: wrap:
+      namedAttrsOption =
+        type:
         lib.mkOption {
           type = lib.types.attrsOf (self.lib.types.dynamic type);
           default = { };
 
           apply = lib.mapAttrs (
             name: value:
-            if lib.isFunction value then
-              args: wrap (value args) // { inherit name; }
-            else
-              wrap value // { inherit name; }
+            if lib.isFunction value then args: value args // { inherit name; } else value // { inherit name; }
           );
         };
 
-      addPkgs =
+      addArtifacts =
         name: clusterConfig:
         let
-          rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) pkgs;
-          artifacts = lib.mapAttrs (_: output: output.artifact) pkgs;
           cluster = self.lib.mkCluster name clusterConfig;
-
-          pkgs = lib.genAttrs config.systems (
+          artifactsBySystem = lib.genAttrs config.systems (
             system:
             withSystem system (
               { pkgs, ... }:
@@ -38,7 +32,11 @@
             )
           );
         in
-        cluster // { inherit artifacts rawArtifacts; };
+        cluster
+        // {
+          artifacts = lib.mapAttrs (_: output: output.artifact) artifactsBySystem;
+          rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) artifactsBySystem;
+        };
 
       resolveCluster =
         clusters: name:
@@ -50,14 +48,13 @@
     in
     {
       options.flake = {
-        clusterCompartments = named self.lib.types.compartmentConfig lib.id;
-        clusterApplications = named self.lib.types.applicationConfig lib.id;
-        clusterGenerators = named self.lib.types.generator lib.id;
-        clusterOverrides = named self.lib.types.rule lib.id;
-        clusterDefaults = named self.lib.types.rule lib.id;
+        clusterCompartments = namedAttrsOption self.lib.types.compartmentConfig;
+        clusterApplications = namedAttrsOption self.lib.types.applicationConfig;
+        clusterOverrides = namedAttrsOption self.lib.types.rule;
+        clusterDefaults = namedAttrsOption self.lib.types.rule;
 
         clusters = lib.mkOption {
-          apply = clusters: lib.mapAttrs (name: _: addPkgs name (resolveCluster clusters name)) clusters;
+          apply = clusters: lib.mapAttrs (name: _: addArtifacts name (resolveCluster clusters name)) clusters;
           type = lib.types.attrsOf lib.types.raw;
           default = { };
         };

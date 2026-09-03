@@ -16,6 +16,7 @@
           namespace = "argocd";
           annotations."argocd.argoproj.io/sync-wave" = toString priority;
         } application.metadata;
+
         spec = lib.recursiveUpdate {
           destination = {
             server = "https://kubernetes.default.svc";

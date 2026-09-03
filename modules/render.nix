@@ -4,41 +4,41 @@
     cluster:
     let
       mkYamlFile =
-        val: dst:
+        documents: destination:
         let
-          src = builtins.toFile (baseNameOf dst) (lib.concatStringsSep "\n---\n" (map builtins.toJSON val));
+          src = builtins.toFile (baseNameOf destination) (
+            lib.concatMapStringsSep "\n---\n" builtins.toJSON documents
+          );
         in
-        ''cp ${src} "$out/${dst}"'';
+        ''cp ${src} "$out/${destination}"'';
 
-      mkResources =
-        rules: path: application:
+      renderApplication =
+        evaluate: meta: priority: path: application:
         let
-          resources = [ (self.lib.mkNamespace application.namespace) ] ++ application.resources;
+          manifest = evaluate (self.lib.mkApplication { inherit application meta path priority; });
+          resources = map evaluate (
+            [ (self.lib.mkNamespace application.namespace) ] ++ application.resources
+          );
         in
-        mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) resources) "${path}/${application.name}.yaml";
-
-      mkApplicationManifest =
-        rules: meta: priority: path: application:
-        mkYamlFile (
-          self.lib.rules.evaluate rules (self.lib.mkApplication { inherit application meta path priority; })
-        ) "applications/${application.name}.yaml";
+        ''
+          ${mkYamlFile resources "${path}/${application.name}.yaml"}
+          ${mkYamlFile [ manifest ] "applications/${application.name}.yaml"}
+        '';
 
       mkCompartment =
         compartment:
         let
           path = "compartments/${compartment.name}";
-          rules = {
-            generators = cluster.generators ++ compartment.generators;
+          evaluate = self.lib.rules.evaluate {
             overrides = cluster.overrides ++ compartment.overrides;
             defaults = cluster.defaults ++ compartment.defaults;
           };
         in
         ''
-          ${lib.concatMapStringsSep "\n" (
-            mkApplicationManifest rules compartment.meta compartment.priority path
-          ) compartment.applications}
           mkdir -p "$out/${path}"
-          ${lib.concatMapStringsSep "\n" (mkResources rules path) compartment.applications}
+          ${lib.concatMapStringsSep "\n" (
+            renderApplication evaluate compartment.meta compartment.priority path
+          ) compartment.applications}
         '';
     in
     builtins.toFile "build.sh" ''
