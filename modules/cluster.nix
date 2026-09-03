@@ -48,5 +48,9 @@
         }).config.cluster
       );
     in
-    cluster // { buildScript = self.lib.renderCluster cluster; };
+    cluster
+    // {
+      buildScript = self.lib.renderCluster cluster;
+      bootstrapScript = self.lib.renderBootstrap cluster;
+    };
 }
