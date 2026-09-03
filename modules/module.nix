@@ -51,13 +51,10 @@
     {
       options.flake = {
         clusterCompartments = named self.lib.types.compartmentConfig lib.id;
+        clusterApplications = named self.lib.types.applicationConfig lib.id;
         clusterGenerators = named self.lib.types.generator lib.id;
         clusterOverrides = named self.lib.types.rule lib.id;
         clusterDefaults = named self.lib.types.rule lib.id;
-
-        clusterModules = named (lib.types.listOf self.lib.types.jsonObject) (modules: {
-          inherit modules;
-        });
 
         clusters = lib.mkOption {
           apply = clusters: lib.mapAttrs (name: _: addPkgs name (resolveCluster clusters name)) clusters;

@@ -3,9 +3,6 @@
   flake.lib.renderCluster =
     cluster:
     let
-      appSet = self.lib.mkApplicationSet { inherit (cluster) compartments name options; };
-      rules = { inherit (cluster) generators overrides defaults; };
-
       mkYamlFile =
         val: dst:
         let
@@ -13,31 +10,42 @@
         in
         ''cp ${src} "$out/${dst}"'';
 
-      mkModule =
-        rules: path: m:
-        mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) m.modules) "${path}/${m.name}.yaml";
-
-      mkComp =
-        c:
+      mkResources =
+        rules: path: application:
         let
-          compartmentRules = {
-            generators = cluster.generators ++ c.generators;
-            overrides = cluster.overrides ++ c.overrides;
-            defaults = cluster.defaults ++ c.defaults;
+          resources = [ (self.lib.mkNamespace application.namespace) ] ++ application.resources;
+        in
+        mkYamlFile (lib.concatMap (self.lib.rules.evaluate rules) resources) "${path}/${application.name}.yaml";
+
+      mkApplicationManifest =
+        rules: meta: priority: path: application:
+        mkYamlFile (
+          self.lib.rules.evaluate rules (self.lib.mkApplication { inherit application meta path priority; })
+        ) "applications/${application.name}.yaml";
+
+      mkCompartment =
+        compartment:
+        let
+          path = "compartments/${compartment.name}";
+          rules = {
+            generators = cluster.generators ++ compartment.generators;
+            overrides = cluster.overrides ++ compartment.overrides;
+            defaults = cluster.defaults ++ compartment.defaults;
           };
         in
         ''
-          mkdir -p "$out/compartments/${c.name}"
-          ${lib.concatMapStringsSep "\n" (mkModule compartmentRules "compartments/${c.name}") c.modules}
+          ${lib.concatMapStringsSep "\n" (
+            mkApplicationManifest rules compartment.meta compartment.priority path
+          ) compartment.applications}
+          mkdir -p "$out/${path}"
+          ${lib.concatMapStringsSep "\n" (mkResources rules path) compartment.applications}
         '';
     in
     builtins.toFile "build.sh" ''
       #!/usr/bin/env -S bash -euo pipefail
 
       out="''${1:?Output dir not specified}"
-      mkdir -p "$out/cluster" "$out/compartments"
-      ${mkYamlFile [ appSet ] "cluster/cluster-${cluster.name}.yaml"}
-      ${lib.concatMapStringsSep "\n" (mkModule rules "cluster") cluster.modules}
-      ${lib.concatMapStringsSep "\n" mkComp cluster.compartments}
+      mkdir -p "$out/applications" "$out/compartments"
+      ${lib.concatMapStringsSep "\n" mkCompartment cluster.compartments}
     '';
 }

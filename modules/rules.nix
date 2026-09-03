@@ -16,17 +16,34 @@
         in
         if builtins.isBool match then match else lib.matchAttrs match value;
 
+      mergeValues =
+        left: right:
+        if builtins.isAttrs left && builtins.isAttrs right then
+          lib.genAttrs (lib.unique (builtins.attrNames left ++ builtins.attrNames right)) (
+            name:
+            if builtins.hasAttr name left && builtins.hasAttr name right then
+              mergeValues left.${name} right.${name}
+            else if builtins.hasAttr name right then
+              right.${name}
+            else
+              left.${name}
+          )
+        else if builtins.isList left && builtins.isList right then
+          left ++ right
+        else
+          right;
+
       apply =
         rules: value:
         let
           merge =
             candidates: current:
-            lib.foldl' (acc: rule: lib.recursiveUpdate acc (resolve "apply" rule current)) { } (
+            lib.foldl' (acc: rule: mergeValues acc (resolve "apply" rule current)) { } (
               matching current candidates
             );
-          updated = lib.recursiveUpdate (merge rules.defaults value) value;
+          updated = mergeValues (merge rules.defaults value) value;
         in
-        lib.recursiveUpdate updated (merge rules.overrides updated);
+        mergeValues updated (merge rules.overrides updated);
     in
     {
       evaluate =

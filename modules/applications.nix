@@ -1,65 +1,53 @@
 { lib, ... }:
 {
-  flake.lib.mkApplicationSet =
-    {
-      compartments,
-      options,
-      name,
-    }:
-    lib.recursiveUpdate {
-      apiVersion = "argoproj.io/v1alpha1";
-      kind = "ApplicationSet";
+  flake.lib = {
+    mkApplication =
+      {
+        application,
+        meta,
+        path,
+        priority,
+      }:
+      {
+        apiVersion = "argoproj.io/v1alpha1";
+        kind = "Application";
+        metadata = lib.recursiveUpdate {
+          inherit (application) name;
+          namespace = "argocd";
+          annotations."argocd.argoproj.io/sync-wave" = toString priority;
+        } application.metadata;
+        spec = lib.recursiveUpdate {
+          destination = {
+            server = "https://kubernetes.default.svc";
+            namespace = application.namespace.name;
+          };
+          project = "default";
+          sources = [
+            {
+              repoURL = meta.image;
+              targetRevision = meta.tag;
+              inherit path;
+              directory.include = "${application.name}.yaml";
+            }
+          ]
+          ++ lib.optional (application.source != null) application.source
+          ++ application.sources;
+        } application.spec;
+      };
+
+    mkNamespace = namespace: {
+      apiVersion = "v1";
+      kind = "Namespace";
       metadata = {
-        name = "cluster-${name}";
-        namespace = "argocd";
-      };
-      spec = {
-        goTemplateOptions = [ "missingkey=error" ];
-        goTemplate = true;
-
-        generators = [
-          {
-            list.elements = lib.concatMap (
-              compartment:
-              map (module: {
-                compartment = compartment.name;
-                module = module.name;
-              }) compartment.modules
-            ) compartments;
+        inherit (namespace) name annotations;
+        labels =
+          lib.optionalAttrs (namespace.type != "") {
+            "pod-security.kubernetes.io/enforce" = namespace.type;
+            "pod-security.kubernetes.io/audit" = namespace.type;
+            "pod-security.kubernetes.io/warn" = namespace.type;
           }
-        ];
-
-        strategy = {
-          type = "RollingSync";
-          rollingSync.steps = map (priority: {
-            matchExpressions = [
-              {
-                key = "compartment";
-                operator = "In";
-                values = map (c: c.name) (builtins.filter (c: c.priority == priority) compartments);
-              }
-            ];
-          }) (lib.sort builtins.lessThan (lib.unique (map (c: c.priority) compartments)));
-        };
-
-        template = {
-          metadata = {
-            name = "{{.module}}";
-            labels."compartment" = "{{.compartment}}";
-          };
-
-          spec = {
-            destination.server = "https://kubernetes.default.svc";
-            syncPolicy.automated.enabled = false;
-            project = "default";
-
-            source = {
-              path = "compartments/{{.compartment}}";
-              directory.include = "{{.module}}.yaml";
-              targetRevision = name;
-            };
-          };
-        };
+          // namespace.labels;
       };
-    } options;
+    };
+  };
 }

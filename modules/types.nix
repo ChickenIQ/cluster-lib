@@ -49,8 +49,62 @@ let
     defaults = list types.rule;
   };
 
+  metaOptions = {
+    image = lib.mkOption { type = lib.types.str; };
+    tag = lib.mkOption { type = lib.types.str; };
+  };
+
+  namespaceOptions = {
+    name = lib.mkOption { type = lib.types.str; };
+    annotations = lib.mkOption {
+      type = jsonObject;
+      default = { };
+    };
+    labels = lib.mkOption {
+      type = jsonObject;
+      default = { };
+    };
+    type = lib.mkOption {
+      type = lib.types.enum [
+        ""
+        "privileged"
+        "baseline"
+        "restricted"
+      ];
+      default = "";
+    };
+  };
+
+  applicationOptions = {
+    resources = lib.mkOption { type = lib.types.listOf jsonObject; };
+    namespace = lib.mkOption {
+      type = lib.types.submodule { options = namespaceOptions; };
+    };
+    bootstrap = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+    };
+    source = lib.mkOption {
+      type = lib.types.nullOr jsonObject;
+      default = null;
+    };
+    sources = list jsonObject;
+    metadata = lib.mkOption {
+      type = jsonObject;
+      default = { };
+    };
+    spec = lib.mkOption {
+      type = jsonObject;
+      default = { };
+    };
+  };
+
   compartmentOptions = ruleOptions // {
-    modules = list types.module;
+    applications = list types.application;
+    meta = lib.mkOption {
+      type = jsonObject;
+      default = { };
+    };
     priority = lib.mkOption {
       type = lib.types.int;
       default = 0;
@@ -58,7 +112,8 @@ let
   };
 
   types = rec {
-    module = named { modules = lib.mkOption { type = lib.types.listOf jsonObject; }; };
+    applicationConfig = lib.types.submodule { options = applicationOptions; };
+    application = named applicationOptions;
     compartmentConfig = lib.types.submodule { options = compartmentOptions; };
     generator = matcher "generate" (dynamic (lib.types.listOf jsonObject));
     rule = matcher "apply" (dynamic jsonObject);
@@ -70,15 +125,7 @@ let
         compartments = list compartment;
 
         meta = lib.mkOption {
-          type = lib.types.attrsOf lib.types.raw;
-          default = { };
-        };
-
-        modules = list types.module;
-
-        options = lib.mkOption {
-          type = jsonObject;
-          default = { };
+          type = lib.types.submodule { options = metaOptions; };
         };
 
         name = lib.mkOption {
@@ -90,5 +137,6 @@ let
   };
 in
 {
-  flake.lib.types = types;
+  options.flake.lib = lib.mkOption { type = lib.types.lazyAttrsOf lib.types.raw; };
+  config.flake.lib.types = types;
 }
