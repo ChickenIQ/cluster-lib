@@ -1,6 +1,6 @@
 { self, lib, ... }:
 let
-  apply = "kubectl apply --server-side --force-conflicts";
+  apply = "kubectl apply --server-side --force-conflicts -f";
 
   renderHelm =
     manifest: source:
@@ -25,7 +25,7 @@ let
         "-"
       ];
     in
-    "${cmd} | ${apply} --namespace ${lib.escapeShellArg manifest.spec.destination.namespace} -f -";
+    "${cmd} | ${apply} -";
 
   renderApp =
     rawApp:
@@ -37,9 +37,10 @@ let
       inherit (app) manifest;
     in
     lib.optionalString app.bootstrap ''
-      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -
+      kubectl config set-context --current --namespace=${lib.escapeShellArg manifest.spec.destination.namespace}
+      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -
       ${lib.concatMapStringsSep "\n" (renderHelm manifest) helmSources}
-      ${apply} --namespace ${lib.escapeShellArg manifest.spec.destination.namespace} -f ${lib.escapeShellArg app.resourcePath}
+      ${apply} ${lib.escapeShellArg app.resourcePath}
     '';
 in
 {
@@ -48,6 +49,9 @@ in
     builtins.toFile "bootstrap.sh" ''
       #!/bin/sh
       set -euo pipefail
+
+      ns="$(kubectl config view --minify -o jsonpath='{..namespace}')"
+      trap 'kubectl config set-context --current --namespace="''${ns:-default}"' EXIT
 
       cd "$(dirname "$0")"
       ${lib.concatMapStringsSep "\n" renderApp apps}
