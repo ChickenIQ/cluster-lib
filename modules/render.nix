@@ -30,7 +30,7 @@
 
       renderApp = app: ''
         ${mkYamlFile [ app.manifest ] app.manifestPath}
-        ${mkYamlFile ([ app.namespace ] ++ app.resources) app.resourcePath}
+        ${mkYamlFile (lib.optional (app.namespace != null) app.namespace ++ app.resources) app.resourcePath}
       '';
 
       renderCompartment = compartment: ''

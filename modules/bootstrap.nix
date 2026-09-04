@@ -38,7 +38,7 @@ let
     in
     lib.optionalString app.bootstrap ''
       export POD_NAMESPACE=${lib.escapeShellArg manifest.spec.destination.namespace}
-      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -
+      ${lib.optionalString (app.namespace != null) "printf '%s\\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -"}
       ${lib.concatMapStringsSep "\n" (renderHelm manifest) helmSources}
       ${apply} -f ${lib.escapeShellArg app.resourcePath}
     '';

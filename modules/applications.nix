@@ -1,5 +1,13 @@
 { lib, ... }:
 
+let
+  builtinNamespaces = [
+    "kube-node-lease"
+    "kube-system"
+    "kube-public"
+    "default"
+  ];
+in
 {
   flake.lib.app = rec {
     mkSource =
@@ -22,7 +30,8 @@
         applyRules,
       }:
       let
-        namespace = applyRules (mkNs application.namespace);
+        isBuiltin = builtins.elem application.namespace.name builtinNamespaces;
+        namespace = if isBuiltin then null else applyRules (mkNs application.namespace);
         path = "compartments/${compartment.name}";
         source = mkSource {
           inherit application path;
