@@ -8,15 +8,23 @@
       ...
     }:
     let
-      namedAttrsOption =
+      opt =
         type:
         lib.mkOption {
-          type = lib.types.attrsOf (self.lib.types.dynamic type);
+          type = lib.types.attrsOf lib.types.deferredModule;
           default = { };
 
           apply = lib.mapAttrs (
             name: value:
-            if lib.isFunction value then args: value args // { inherit name; } else value // { inherit name; }
+            { meta, ... }:
+            (lib.evalModules {
+              specialArgs = { inherit meta; };
+              modules = [
+                { options = removeAttrs (type.getSubOptions [ name ]) [ "_module" ]; }
+                value
+                { config.name = name; }
+              ];
+            }).config
           );
         };
 
@@ -34,9 +42,9 @@
         in
         cluster
         // {
-          artifacts = lib.mapAttrs (_: output: output.artifact) artifactsBySystem;
-          bootstrap = lib.mapAttrs (_: output: output.bootstrap) artifactsBySystem;
           rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) artifactsBySystem;
+          bootstrap = lib.mapAttrs (_: output: output.bootstrap) artifactsBySystem;
+          artifacts = lib.mapAttrs (_: output: output.artifact) artifactsBySystem;
         };
 
       resolveCluster =
@@ -49,10 +57,10 @@
     in
     {
       options.flake = {
-        clusterCompartments = namedAttrsOption self.lib.types.compartmentConfig;
-        clusterApplications = namedAttrsOption self.lib.types.applicationConfig;
-        clusterOverrides = namedAttrsOption self.lib.types.rule;
-        clusterDefaults = namedAttrsOption self.lib.types.rule;
+        clusterCompartments = opt self.lib.types.compartment;
+        clusterApplications = opt self.lib.types.application;
+        clusterOverrides = opt self.lib.types.rule;
+        clusterDefaults = opt self.lib.types.rule;
 
         clusters = lib.mkOption {
           apply = clusters: lib.mapAttrs (name: _: addArtifacts name (resolveCluster clusters name)) clusters;
