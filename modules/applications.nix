@@ -9,17 +9,17 @@
         path,
       }:
       {
-        inherit path;
-        repoURL = meta.image;
-        targetRevision = meta.tag;
         directory.include = "${application.name}.yaml";
+        targetRevision = meta.tag;
+        repoURL = meta.image;
+        inherit path;
       };
 
     eval =
       {
         application,
-        applyRules,
         compartment,
+        applyRules,
       }:
       let
         namespace = applyRules (mkNs application.namespace);
@@ -30,11 +30,11 @@
         };
       in
       {
-        inherit (application) bootstrap name;
-        inherit namespace source;
         manifestPath = "applications/${application.name}.yaml";
         resourcePath = "${path}/${application.name}.yaml";
         resources = map applyRules application.resources;
+        inherit (application) bootstrap name;
+        inherit namespace source;
         manifest = applyRules (mkApp {
           priority = compartment.priority;
           inherit application path;
@@ -45,9 +45,9 @@
     mkApp =
       {
         application,
+        priority,
         meta,
         path,
-        priority,
       }:
       {
         apiVersion = "argoproj.io/v1alpha1";
@@ -59,11 +59,13 @@
         } application.metadata;
 
         spec = lib.recursiveUpdate {
+          project = "default";
+
           destination = {
             server = "https://kubernetes.default.svc";
             namespace = application.namespace.name;
           };
-          project = "default";
+
           sources = [
             (mkSource { inherit application meta path; })
           ]

@@ -20,13 +20,11 @@
       ) cluster.compartments;
 
       mkYamlFile =
-        documents: destination:
+        doc: dst:
         let
-          src = builtins.toFile (baseNameOf destination) (
-            lib.concatMapStringsSep "\n---\n" builtins.toJSON documents
-          );
+          src = builtins.toFile (baseNameOf dst) (lib.concatMapStringsSep "\n---\n" builtins.toJSON doc);
         in
-        ''cp ${src} "$out/${destination}"'';
+        ''cp ${src} "$out/${dst}"'';
 
       renderApp = app: ''
         ${mkYamlFile [ app.manifest ] app.manifestPath}
@@ -41,7 +39,7 @@
     {
       buildScript = builtins.toFile "build.sh" ''
         #!/bin/sh
-        set -eu
+        set -euo pipefail
 
         out="''${1:?Output dir not specified}"
         mkdir -p "$out/applications" "$out/compartments"

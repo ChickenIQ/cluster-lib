@@ -47,8 +47,42 @@
         in
         assert lib.all lib.id checks;
         v;
+
+      bootstrap =
+        app:
+        let
+          sources = app.manifest.spec.sources;
+          isLocal = src: src == app.source;
+          values =
+            source:
+            let
+              helm = source.helm or { };
+            in
+            (helm.valueFiles or [ ]) == [ ]
+            && (helm.parameters or [ ]) == [ ]
+            && (helm.fileParameters or [ ]) == [ ];
+
+          checks = [
+            (lib.assertMsg (
+              lib.count isLocal sources == 1
+            ) "bootstrap requires exactly one generated resource source")
+
+            (lib.assertMsg (lib.all values (
+              builtins.filter (source: source ? chart) sources
+            )) "bootstrap only supports inline Helm values via values or valuesObject")
+
+            (lib.assertMsg (lib.all (
+              source: isLocal source || source ? chart
+            ) sources) "bootstrap only supports the generated resource source and Helm sources")
+          ];
+        in
+        if !app.bootstrap then
+          app
+        else
+          assert lib.all lib.id checks;
+          app;
     in
     {
-      inherit cluster unique;
+      inherit cluster unique bootstrap;
     };
 }
