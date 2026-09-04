@@ -50,8 +50,11 @@ in
       #!/bin/sh
       set -euo pipefail
 
-      ns="$(kubectl config view --minify -o jsonpath='{..namespace}')"
-      trap 'kubectl config set-context --current --namespace="''${ns:-default}"' EXIT
+      ctx="$(kubectl config current-context 2>/dev/null || true)"
+      if [ -n "$ctx" ]; then
+        ns="$(kubectl config view --minify -o jsonpath='{..namespace}')"
+        trap 'kubectl config set-context "$ctx" --namespace="''${ns:-default}"' EXIT
+      fi
 
       cd "$(dirname "$0")"
       ${lib.concatMapStringsSep "\n" renderApp apps}
