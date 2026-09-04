@@ -1,6 +1,6 @@
 { self, lib, ... }:
 let
-  apply = "kubectl apply --server-side --force-conflicts -f";
+  apply = "kubectl apply --server-side --force-conflicts";
 
   renderHelm =
     manifest: source:
@@ -25,7 +25,7 @@ let
         "-"
       ];
     in
-    "${cmd} | ${apply} -";
+    "${cmd} | ${apply} -f -";
 
   renderApp =
     rawApp:
@@ -37,10 +37,10 @@ let
       inherit (app) manifest;
     in
     lib.optionalString app.bootstrap ''
-      kubectl config set-context --current --namespace=${lib.escapeShellArg manifest.spec.destination.namespace}
-      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -
+      export POD_NAMESPACE=${lib.escapeShellArg manifest.spec.destination.namespace}
+      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -
       ${lib.concatMapStringsSep "\n" (renderHelm manifest) helmSources}
-      ${apply} ${lib.escapeShellArg app.resourcePath}
+      ${apply} -f ${lib.escapeShellArg app.resourcePath}
     '';
 in
 {
