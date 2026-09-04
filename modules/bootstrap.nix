@@ -1,12 +1,12 @@
 { self, lib, ... }:
 let
-  apply = "kubectl apply --server-side --force-conflicts -f";
+  apply = "kubectl apply --server-side --force-conflicts";
 
   renderHelm =
     manifest: source:
     let
-      values = if helm ? valuesObject then builtins.toJSON helm.valuesObject else helm.values or null;
       cmd = if values == null then template else "printf %s ${lib.escapeShellArg values} | ${template}";
+      values = if helm ? valuesObject then builtins.toJSON helm.valuesObject else helm.values or null;
       template = "helm template ${lib.escapeShellArgs args}";
       helm = source.helm or { };
       args = [
@@ -25,7 +25,7 @@ let
         "-"
       ];
     in
-    "${cmd} | ${apply} -";
+    "${cmd} | ${apply} --namespace ${lib.escapeShellArg manifest.spec.destination.namespace} -f -";
 
   renderApp =
     rawApp:
@@ -37,9 +37,9 @@ let
       inherit (app) manifest;
     in
     lib.optionalString app.bootstrap ''
-      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -
+      printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -
       ${lib.concatMapStringsSep "\n" (renderHelm manifest) helmSources}
-      ${apply} ${lib.escapeShellArg app.resourcePath}
+      ${apply} --namespace ${lib.escapeShellArg manifest.spec.destination.namespace} -f ${lib.escapeShellArg app.resourcePath}
     '';
 in
 {
