@@ -24,7 +24,7 @@
         let
           src = builtins.toFile (baseNameOf dst) (lib.concatMapStringsSep "\n---\n" builtins.toJSON doc);
         in
-        ''cp ${src} "$out/${dst}"'';
+        ''install -m 0644 ${src} "$out/${dst}"'';
 
       renderApp = app: ''
         ${mkYamlFile [ app.manifest ] app.manifestPath}

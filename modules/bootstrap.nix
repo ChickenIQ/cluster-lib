@@ -30,16 +30,16 @@ let
   renderApp =
     rawApp:
     let
+      helmSources = builtins.filter (source: !isLocal source) sources;
       app = self.lib.validation.bootstrap rawApp;
       isLocal = source: source == app.source;
       sources = manifest.spec.sources;
       inherit (app) manifest;
-      renderSource =
-        s: if isLocal s then apply + " " + lib.escapeShellArg app.resourcePath else renderHelm manifest s;
     in
     lib.optionalString app.bootstrap ''
       printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -
-      ${lib.concatMapStringsSep "\n" renderSource sources}
+      ${lib.concatMapStringsSep "\n" (renderHelm manifest) helmSources}
+      ${apply} ${lib.escapeShellArg app.resourcePath}
     '';
 in
 {
