@@ -48,5 +48,5 @@
         }).config.cluster
       );
     in
-    cluster // self.lib.render cluster;
+    cluster // { buildScript = self.lib.render cluster; };
 }

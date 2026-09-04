@@ -3,6 +3,8 @@
   flake.lib.render =
     cluster:
     let
+      bootstrap = self.lib.bootstrap (lib.concatMap (c: c.applications) compartments);
+
       compartments = map (
         compartment:
         let
@@ -36,16 +38,13 @@
         ${lib.concatMapStringsSep "\n" renderApp compartment.applications}
       '';
     in
-    {
-      buildScript = builtins.toFile "build.sh" ''
-        #!/bin/sh
-        set -euo pipefail
+    builtins.toFile "build.sh" ''
+      #!/bin/sh
+      set -euo pipefail
 
-        out="''${1:?Output dir not specified}"
-        mkdir -p "$out/applications" "$out/compartments"
-        ${lib.concatMapStringsSep "\n" renderCompartment compartments}
-      '';
-
-      bootstrapScript = self.lib.bootstrap (lib.concatMap (c: c.applications) compartments);
-    };
+      out="''${1:?Output dir not specified}"
+      mkdir -p "$out/applications" "$out/compartments"
+      install -m 0755 ${bootstrap} "$out/bootstrap.sh"
+      ${lib.concatMapStringsSep "\n" renderCompartment compartments}
+    '';
 }
