@@ -1,8 +1,24 @@
 { self, lib, ... }:
 {
-  flake.lib.renderCluster =
+  flake.lib.render =
     cluster:
     let
+      compartments = map (
+        compartment:
+        let
+          applyRules = self.lib.rules.eval {
+            overrides = cluster.overrides ++ compartment.overrides;
+            defaults = cluster.defaults ++ compartment.defaults;
+          };
+        in
+        {
+          inherit (compartment) name;
+          applications = map (
+            application: self.lib.app.eval { inherit application applyRules compartment; }
+          ) compartment.applications;
+        }
+      ) cluster.compartments;
+
       mkYamlFile =
         documents: destination:
         let
@@ -12,40 +28,26 @@
         in
         ''cp ${src} "$out/${destination}"'';
 
-      renderApplication =
-        evaluate: meta: priority: path: application:
-        let
-          manifest = evaluate (self.lib.mkApplication { inherit application meta path priority; });
-          resources = map evaluate (
-            [ (self.lib.mkNamespace application.namespace) ] ++ application.resources
-          );
-        in
-        ''
-          ${mkYamlFile resources "${path}/${application.name}.yaml"}
-          ${mkYamlFile [ manifest ] "applications/${application.name}.yaml"}
-        '';
+      renderApp = app: ''
+        ${mkYamlFile [ app.manifest ] app.manifestPath}
+        ${mkYamlFile ([ app.namespace ] ++ app.resources) app.resourcePath}
+      '';
 
-      mkCompartment =
-        compartment:
-        let
-          path = "compartments/${compartment.name}";
-          evaluate = self.lib.rules.evaluate {
-            overrides = cluster.overrides ++ compartment.overrides;
-            defaults = cluster.defaults ++ compartment.defaults;
-          };
-        in
-        ''
-          mkdir -p "$out/${path}"
-          ${lib.concatMapStringsSep "\n" (
-            renderApplication evaluate compartment.meta compartment.priority path
-          ) compartment.applications}
-        '';
+      renderCompartment = compartment: ''
+        mkdir -p "$out/compartments/${compartment.name}"
+        ${lib.concatMapStringsSep "\n" renderApp compartment.applications}
+      '';
     in
-    builtins.toFile "build.sh" ''
-      #!/usr/bin/env -S bash -euo pipefail
+    {
+      buildScript = builtins.toFile "build.sh" ''
+        #!/bin/sh
+        set -eu
 
-      out="''${1:?Output dir not specified}"
-      mkdir -p "$out/applications" "$out/compartments"
-      ${lib.concatMapStringsSep "\n" mkCompartment cluster.compartments}
-    '';
+        out="''${1:?Output dir not specified}"
+        mkdir -p "$out/applications" "$out/compartments"
+        ${lib.concatMapStringsSep "\n" renderCompartment compartments}
+      '';
+
+      bootstrapScript = self.lib.bootstrap compartments;
+    };
 }

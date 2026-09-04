@@ -42,7 +42,6 @@
         in
         cluster
         // {
-          rawArtifacts = lib.mapAttrs (_: output: output.rawArtifact) artifactsBySystem;
           bootstrap = lib.mapAttrs (_: output: output.bootstrap) artifactsBySystem;
           artifacts = lib.mapAttrs (_: output: output.artifact) artifactsBySystem;
         };

@@ -49,8 +49,6 @@
         ];
     in
     {
-      evaluate =
-        rules:
-        apply (lib.mapAttrs (_: lib.sortOn (rule: rule.priority)) rules);
+      eval = rules: apply (lib.mapAttrs (_: lib.sortOn (rule: rule.priority)) rules);
     };
 }

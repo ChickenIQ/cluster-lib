@@ -1,7 +1,48 @@
 { lib, ... }:
+
 {
-  flake.lib = {
-    mkApplication =
+  flake.lib.app = rec {
+    mkSource =
+      {
+        application,
+        meta,
+        path,
+      }:
+      {
+        inherit path;
+        repoURL = meta.image;
+        targetRevision = meta.tag;
+        directory.include = "${application.name}.yaml";
+      };
+
+    eval =
+      {
+        application,
+        applyRules,
+        compartment,
+      }:
+      let
+        namespace = applyRules (mkNs application.namespace);
+        path = "compartments/${compartment.name}";
+        source = mkSource {
+          inherit application path;
+          meta = compartment.meta;
+        };
+      in
+      {
+        inherit (application) bootstrap name;
+        inherit namespace source;
+        manifestPath = "applications/${application.name}.yaml";
+        resourcePath = "${path}/${application.name}.yaml";
+        resources = map applyRules application.resources;
+        manifest = applyRules (mkApp {
+          priority = compartment.priority;
+          inherit application path;
+          meta = compartment.meta;
+        });
+      };
+
+    mkApp =
       {
         application,
         meta,
@@ -24,19 +65,14 @@
           };
           project = "default";
           sources = [
-            {
-              repoURL = meta.image;
-              targetRevision = meta.tag;
-              inherit path;
-              directory.include = "${application.name}.yaml";
-            }
+            (mkSource { inherit application meta path; })
           ]
           ++ lib.optional (application.source != null) application.source
           ++ application.sources;
         } application.spec;
       };
 
-    mkNamespace = namespace: {
+    mkNs = namespace: {
       apiVersion = "v1";
       kind = "Namespace";
       metadata = {
