@@ -48,6 +48,6 @@
         ${lib.concatMapStringsSep "\n" renderCompartment compartments}
       '';
 
-      bootstrapScript = self.lib.bootstrap compartments;
+      bootstrapScript = self.lib.bootstrap (lib.concatMap (c: c.applications) compartments);
     };
 }

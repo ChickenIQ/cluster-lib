@@ -22,7 +22,9 @@ let
         "--values"
         "-"
       ];
-      cmd = "helm template ${lib.escapeShellArgs args}";
+
+      template = "helm template ${lib.escapeShellArgs args}";
+      cmd = if values == null then template else "printf %s ${lib.escapeShellArg values} | ${template}";
     in
     assert lib.assertMsg (
       (helm.valueFiles or [ ]) == [ ]
@@ -30,7 +32,7 @@ let
       && (helm.fileParameters or [ ]) == [ ]
     ) "bootstrap only supports inline Helm values via values or valuesObject";
     ''
-      template=$(${if values == null then cmd else "printf %s ${lib.escapeShellArg values} | ${cmd}"})
+      template=$(${cmd})
       printf '%s\n' "$template" | ${apply} -
     '';
 
@@ -40,7 +42,6 @@ let
       inherit (app) manifest;
       sources = manifest.spec.sources;
       isLocal = source: source == app.source;
-      localSources = builtins.filter isLocal sources;
       renderSource =
         source:
         if isLocal source then
@@ -50,11 +51,13 @@ let
     in
     lib.optionalString app.bootstrap (
       assert lib.assertMsg (
-        builtins.length localSources == 1
+        lib.count isLocal sources == 1
       ) "bootstrap requires exactly one generated resource source";
+
       assert lib.assertMsg (lib.all (
         source: isLocal source || source ? chart
       ) sources) "bootstrap only supports the generated resource source and Helm sources";
+
       ''
         printf '%s\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -
         ${lib.concatMapStringsSep "\n" renderSource sources}
@@ -63,14 +66,12 @@ let
 in
 {
   flake.lib.bootstrap =
-    compartments:
+    apps:
     builtins.toFile "bootstrap.sh" ''
       #!/bin/sh
       set -eu
 
       cd "$(dirname "$0")"
-      ${lib.concatMapStringsSep "\n" (
-        compartment: lib.concatMapStringsSep "\n" renderApp compartment.applications
-      ) compartments}
+      ${lib.concatMapStringsSep "\n" renderApp apps}
     '';
 }
