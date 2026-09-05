@@ -30,24 +30,34 @@ in
         applyRules,
       }:
       let
-        isBuiltin = builtins.elem application.namespace.name builtinNamespaces;
-        namespace = if isBuiltin then null else applyRules (mkNs application.namespace);
+        namespaceConfig = application.namespace;
+
+        createNamespace =
+          namespaceConfig != null
+          && namespaceConfig.create
+          && !builtins.elem namespaceConfig.name builtinNamespaces;
+
+        namespace = if createNamespace then applyRules (mkNs namespaceConfig) else null;
+        resources = map applyRules application.resources;
         path = "compartments/${compartment.name}";
-        source = mkSource {
-          inherit application path;
-          meta = compartment.meta;
-        };
+        source =
+          if namespace == null && resources == [ ] then
+            null
+          else
+            mkSource {
+              inherit application path;
+              meta = compartment.meta;
+            };
       in
       {
         manifestPath = "applications/${application.name}.yaml";
         resourcePath = "${path}/${application.name}.yaml";
-        resources = map applyRules application.resources;
+        inherit resources;
         inherit (application) bootstrap name;
         inherit namespace source;
         manifest = applyRules (mkApp {
           priority = compartment.priority;
-          inherit application path;
-          meta = compartment.meta;
+          inherit application source;
         });
       };
 
@@ -55,8 +65,7 @@ in
       {
         application,
         priority,
-        meta,
-        path,
+        source,
       }:
       {
         apiVersion = "argoproj.io/v1alpha1";
@@ -68,18 +77,21 @@ in
         } application.metadata;
 
         spec = lib.recursiveUpdate {
-          project = "default";
+          inherit (application) project;
 
-          destination = {
-            server = "https://kubernetes.default.svc";
-            namespace = application.namespace.name;
-          };
+          destination = lib.recursiveUpdate (
+            {
+              server = "https://kubernetes.default.svc";
+            }
+            // lib.optionalAttrs (application.namespace != null) {
+              namespace = application.namespace.name;
+            }
+          ) application.destination;
 
-          sources = [
-            (mkSource { inherit application meta path; })
-          ]
-          ++ lib.optional (application.source != null) application.source
-          ++ application.sources;
+          sources =
+            lib.optional (source != null) source
+            ++ lib.optional (application.source != null) application.source
+            ++ application.sources;
         } application.spec;
       };
 

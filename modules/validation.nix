@@ -52,7 +52,7 @@
         app:
         let
           sources = app.manifest.spec.sources;
-          isLocal = src: src == app.source;
+          isLocal = src: app.source != null && src == app.source;
           values =
             source:
             let
@@ -64,8 +64,12 @@
 
           checks = [
             (lib.assertMsg (
-              lib.count isLocal sources == 1
-            ) "bootstrap requires exactly one generated resource source")
+              lib.count isLocal sources == (if app.source == null then 0 else 1)
+            ) "bootstrap has an invalid generated resource source")
+
+            (lib.assertMsg (lib.all (
+              source: !(source ? chart) || app.manifest.spec.destination ? namespace
+            ) sources) "bootstrap Helm sources require a destination namespace")
 
             (lib.assertMsg (lib.all values (
               builtins.filter (source: source ? chart) sources

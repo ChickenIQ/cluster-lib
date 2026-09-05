@@ -32,15 +32,19 @@ let
     let
       helmSources = builtins.filter (source: !isLocal source) sources;
       app = self.lib.validation.bootstrap rawApp;
-      isLocal = source: source == app.source;
+      isLocal = source: app.source != null && source == app.source;
       sources = manifest.spec.sources;
       inherit (app) manifest;
     in
     lib.optionalString app.bootstrap ''
-      export POD_NAMESPACE=${lib.escapeShellArg manifest.spec.destination.namespace}
-      ${lib.optionalString (app.namespace != null) "printf '%s\\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -"}
+      ${lib.optionalString (
+        manifest.spec.destination ? namespace
+      ) "export POD_NAMESPACE=${lib.escapeShellArg manifest.spec.destination.namespace}"}
+      ${lib.optionalString (
+        app.namespace != null
+      ) "printf '%s\\n' ${lib.escapeShellArg (builtins.toJSON app.namespace)} | ${apply} -f -"}
       ${lib.concatMapStringsSep "\n" (renderHelm manifest) helmSources}
-      ${apply} -f ${lib.escapeShellArg app.resourcePath}
+      ${lib.optionalString (app.source != null) "${apply} -f ${lib.escapeShellArg app.resourcePath}"}
     '';
 in
 {

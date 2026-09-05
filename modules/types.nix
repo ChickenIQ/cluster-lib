@@ -41,6 +41,10 @@ let
 
   namespaceOptions = {
     name = lib.mkOption { type = lib.types.str; };
+    create = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+    };
     annotations = emptyJsonOption;
     labels = emptyJsonOption;
     type = lib.mkOption {
@@ -57,8 +61,14 @@ let
   applicationOptions = {
     resources = lib.mkOption { type = lib.types.listOf jsonObject; };
     namespace = lib.mkOption {
-      type = submodule namespaceOptions;
+      type = lib.types.nullOr (submodule namespaceOptions);
+      default = null;
     };
+    project = lib.mkOption {
+      type = lib.types.str;
+      default = "default";
+    };
+    destination = emptyJsonOption;
     bootstrap = lib.mkOption {
       type = lib.types.bool;
       default = false;
