@@ -21,6 +21,12 @@
         }
       ) cluster.compartments;
 
+      namespaces = lib.filter (namespace: namespace != null) (
+        lib.concatMap (
+          compartment: map (application: application.namespace) compartment.applications
+        ) compartments
+      );
+
       mkYamlFile =
         doc: dst:
         let
@@ -30,9 +36,7 @@
 
       renderApp = app: ''
         ${mkYamlFile [ app.manifest ] app.manifestPath}
-        ${lib.optionalString (app.source != null) (
-          mkYamlFile (lib.optional (app.namespace != null) app.namespace ++ app.resources) app.resourcePath
-        )}
+        ${lib.optionalString (app.source != null) (mkYamlFile app.resources app.resourcePath)}
       '';
 
       renderCompartment = compartment: ''
@@ -47,6 +51,7 @@
       out="''${1:?Output dir not specified}"
       mkdir -p "$out/applications" "$out/compartments"
       install -m 0755 ${bootstrap} "$out/bootstrap.sh"
+      ${lib.optionalString (namespaces != [ ]) (mkYamlFile namespaces "applications/_namespaces.yaml")}
       ${lib.concatMapStringsSep "\n" renderCompartment compartments}
     '';
 }

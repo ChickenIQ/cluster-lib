@@ -59,6 +59,7 @@ let
   };
 
   applicationOptions = {
+    applications = listOption lib.types.raw;
     resources = lib.mkOption { type = lib.types.listOf jsonObject; };
     namespace = lib.mkOption {
       type = lib.types.nullOr (submodule namespaceOptions);

@@ -41,7 +41,7 @@ in
         resources = map applyRules application.resources;
         path = "compartments/${compartment.name}";
         source =
-          if namespace == null && resources == [ ] then
+          if resources == [ ] then
             null
           else
             mkSource {
@@ -99,7 +99,10 @@ in
       apiVersion = "v1";
       kind = "Namespace";
       metadata = {
-        inherit (namespace) name annotations;
+        inherit (namespace) name;
+        annotations = namespace.annotations // {
+          "argocd.argoproj.io/sync-wave" = "-9999";
+        };
         labels =
           lib.optionalAttrs (namespace.type != "") {
             "pod-security.kubernetes.io/enforce" = namespace.type;
