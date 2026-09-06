@@ -40,7 +40,13 @@ in
         namespace = if createNamespace then applyRules (mkNs namespaceConfig) else null;
         resources = map applyRules application.resources;
         applications = map (
-          application: eval { inherit application applyRules compartment; }
+          application:
+          eval {
+            inherit application applyRules;
+            compartment = compartment // {
+              priority = 0;
+            };
+          }
         ) application.applications;
         path = "compartments/${compartment.name}";
         source =
