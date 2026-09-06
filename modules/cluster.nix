@@ -24,7 +24,7 @@
         let
           resolved = resolve meta application;
         in
-        resolved // { applications = map (resolveApplication meta) resolved.applications; };
+        resolved // { applications = map (resolveApplication meta) (resolved.applications or [ ]); };
 
       resolveCompartment =
         compartment:
