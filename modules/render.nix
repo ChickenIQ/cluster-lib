@@ -3,7 +3,12 @@
   flake.lib.render =
     cluster:
     let
-      bootstrap = self.lib.bootstrap (lib.concatMap (c: c.applications) compartments);
+      applications = flatten (lib.concatMap (compartment: compartment.applications) compartments);
+      bootstrap = self.lib.bootstrap applications;
+
+      flatten =
+        applications:
+        lib.concatMap (application: [ application ] ++ flatten application.applications) applications;
 
       compartments = map (
         compartment:
@@ -22,9 +27,7 @@
       ) cluster.compartments;
 
       namespaces = lib.filter (namespace: namespace != null) (
-        lib.concatMap (
-          compartment: map (application: application.namespace) compartment.applications
-        ) compartments
+        map (application: application.namespace) applications
       );
 
       mkYamlFile =
@@ -35,12 +38,17 @@
         ''install -m 0644 ${src} "$out/${dst}"'';
 
       renderApp = app: ''
-        ${mkYamlFile [ app.manifest ] app.manifestPath}
-        ${lib.optionalString (app.source != null) (mkYamlFile app.resources app.resourcePath)}
+        ${lib.optionalString (app.source != null) (
+          mkYamlFile (app.resources ++ map (child: child.manifest) app.applications) app.resourcePath
+        )}
+        ${lib.concatMapStringsSep "\n" renderApp app.applications}
       '';
 
       renderCompartment = compartment: ''
         mkdir -p "$out/compartments/${compartment.name}"
+        ${lib.concatMapStringsSep "\n" (
+          app: mkYamlFile [ app.manifest ] app.manifestPath
+        ) compartment.applications}
         ${lib.concatMapStringsSep "\n" renderApp compartment.applications}
       '';
     in

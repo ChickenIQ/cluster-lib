@@ -19,15 +19,12 @@
           overrides = map (resolve meta) (value.overrides or [ ]);
         };
 
-      resolveApplications =
-        meta: applications:
-        lib.concatMap (
-          application:
-          let
-            resolved = resolve meta application;
-          in
-          [ resolved ] ++ resolveApplications meta resolved.applications
-        ) applications;
+      resolveApplication =
+        meta: application:
+        let
+          resolved = resolve meta application;
+        in
+        resolved // { applications = map (resolveApplication meta) resolved.applications; };
 
       resolveCompartment =
         compartment:
@@ -38,7 +35,7 @@
         in
         resolved
         // {
-          applications = resolveApplications compartmentMeta (resolved.applications or [ ]);
+          applications = map (resolveApplication compartmentMeta) (resolved.applications or [ ]);
           meta = compartmentMeta;
         };
 

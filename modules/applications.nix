@@ -39,9 +39,12 @@ in
 
         namespace = if createNamespace then applyRules (mkNs namespaceConfig) else null;
         resources = map applyRules application.resources;
+        applications = map (
+          application: eval { inherit application applyRules compartment; }
+        ) application.applications;
         path = "compartments/${compartment.name}";
         source =
-          if resources == [ ] then
+          if resources == [ ] && applications == [ ] then
             null
           else
             mkSource {
@@ -52,7 +55,7 @@ in
       {
         manifestPath = "applications/${application.name}.yaml";
         resourcePath = "${path}/${application.name}.yaml";
-        inherit resources;
+        inherit applications resources;
         inherit (application) bootstrap name;
         inherit namespace source;
         manifest = applyRules (mkApp {

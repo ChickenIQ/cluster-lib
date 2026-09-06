@@ -15,12 +15,15 @@
       cluster =
         v:
         let
+          flatten =
+            applications:
+            lib.concatMap (application: [ application ] ++ flatten application.applications) applications;
           ruleChecks = rules: [
             (unique "override" rules.overrides)
             (unique "default" rules.defaults)
           ];
 
-          applications = lib.concatMap (c: c.applications) v.compartments;
+          applications = flatten (lib.concatMap (c: c.applications) v.compartments);
           embeddedApplications = lib.concatMap (
             application:
             lib.concatMap (
