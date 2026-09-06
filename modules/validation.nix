@@ -5,8 +5,8 @@
       unique =
         kind: values:
         let
-          names = map (value: value.name) values;
           duplicates = builtins.filter (n: 1 < lib.count (c: c == n) names) (lib.unique names);
+          names = map (value: value.name) values;
         in
         lib.assertMsg (
           duplicates == [ ]
@@ -18,12 +18,18 @@
           flatten =
             applications:
             lib.concatMap (application: [ application ] ++ flatten application.applications) applications;
+
           ruleChecks = rules: [
             (unique "override" rules.overrides)
             (unique "default" rules.defaults)
           ];
 
+          declaredNamespaces = builtins.filter (namespace: namespace.name != null) namespaces;
           applications = flatten (lib.concatMap (c: c.applications) v.compartments);
+          namespaces = builtins.filter (namespace: namespace != null) (
+            map (application: application.namespace) applications
+          );
+
           embeddedApplications = lib.concatMap (
             application:
             lib.concatMap (
@@ -44,6 +50,10 @@
               }
             ) v.compartments
             ++ [
+              (lib.assertMsg (lib.all (
+                namespace: (namespace.name == null) != (namespace.existing == null)
+              ) namespaces) "application namespaces must set exactly one of name or existing")
+              (unique "namespace" declaredNamespaces)
               (unique "application" (applications ++ embeddedApplications))
               (unique "compartment" v.compartments)
             ];
@@ -54,8 +64,8 @@
       bootstrap =
         app:
         let
-          sources = app.manifest.spec.sources;
           isLocal = src: app.source != null && src == app.source;
+          sources = app.manifest.spec.sources;
           values =
             source:
             let

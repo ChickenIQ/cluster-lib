@@ -1,6 +1,9 @@
 { lib, ... }:
 
 let
+  namespaceName =
+    namespace: if namespace.existing != null then namespace.existing else namespace.name;
+
   builtinNamespaces = [
     "kube-node-lease"
     "kube-system"
@@ -32,12 +35,12 @@ in
       let
         namespaceConfig = application.namespace;
 
-        createNamespace =
+        declaredNamespace =
           namespaceConfig != null
-          && namespaceConfig.create
-          && !builtins.elem namespaceConfig.name builtinNamespaces;
+          && namespaceConfig.existing == null
+          && !builtins.elem (namespaceName namespaceConfig) builtinNamespaces;
 
-        namespace = if createNamespace then applyRules (mkNs namespaceConfig) else null;
+        namespace = if declaredNamespace then applyRules (mkNs namespaceConfig) else null;
         resources = map applyRules application.resources;
         applications = map (
           application:
@@ -93,7 +96,7 @@ in
               server = "https://kubernetes.default.svc";
             }
             // lib.optionalAttrs (application.namespace != null) {
-              namespace = application.namespace.name;
+              namespace = namespaceName application.namespace;
             }
           ) application.destination;
 

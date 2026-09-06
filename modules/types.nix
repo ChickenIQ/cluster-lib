@@ -40,10 +40,13 @@ let
   };
 
   namespaceOptions = {
-    name = lib.mkOption { type = lib.types.str; };
-    create = lib.mkOption {
-      type = lib.types.bool;
-      default = true;
+    name = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+    };
+    existing = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
     };
     annotations = emptyJsonOption;
     labels = emptyJsonOption;
