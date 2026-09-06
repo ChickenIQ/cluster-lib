@@ -15,6 +15,13 @@
       cluster =
         v:
         let
+          builtinNamespaces = [
+            "kube-node-lease"
+            "kube-system"
+            "kube-public"
+            "default"
+          ];
+
           flatten =
             applications:
             lib.concatMap (application: [ application ] ++ flatten application.applications) applications;
@@ -53,6 +60,9 @@
               (lib.assertMsg (lib.all (
                 namespace: (namespace.name == null) != (namespace.existing == null)
               ) namespaces) "application namespaces must set exactly one of name or existing")
+              (lib.assertMsg (lib.all (
+                namespace: !builtins.elem namespace.name builtinNamespaces
+              ) declaredNamespaces) "built-in namespaces must use namespace.existing")
               (unique "namespace" declaredNamespaces)
               (unique "application" (applications ++ embeddedApplications))
               (unique "compartment" v.compartments)

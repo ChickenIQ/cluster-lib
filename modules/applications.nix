@@ -4,12 +4,6 @@ let
   namespaceName =
     namespace: if namespace.existing != null then namespace.existing else namespace.name;
 
-  builtinNamespaces = [
-    "kube-node-lease"
-    "kube-system"
-    "kube-public"
-    "default"
-  ];
 in
 {
   flake.lib.app = rec {
@@ -33,15 +27,10 @@ in
         applyRules,
       }:
       let
-        namespaceConfig = application.namespace;
-
-        declaredNamespace =
-          namespaceConfig != null
-          && namespaceConfig.existing == null
-          && !builtins.elem (namespaceName namespaceConfig) builtinNamespaces;
-
         namespace = if declaredNamespace then applyRules (mkNs namespaceConfig) else null;
+        declaredNamespace = namespaceConfig != null && namespaceConfig.existing == null;
         resources = map applyRules application.resources;
+        namespaceConfig = application.namespace;
         applications = map (
           application:
           eval {
